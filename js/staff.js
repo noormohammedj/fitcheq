@@ -69,7 +69,7 @@
     const list = (mine.length || isAdmin ? mine : P.members);
     return head('Members', list.length + ' members' + (!isAdmin ? (cache.filter === 'all' ? ' in the gym' : ' assigned to you') : ''), (isAdmin ? '<button class="btn dark" data-act="add-member">' + ic('plus') + 'Add member</button>' : '<button class="btn" data-act="toggle-mine">' + (cache.filter === 'all' ? 'Show my clients' : 'Show all members') + '</button>')) +
       '<input class="search" id="msearch" placeholder="Search by name or phone" aria-label="Search members">' +
-      '<div class="table"><table><thead><tr><th>Member</th><th>Diet</th><th>Today’s meals</th><th>Today’s workout</th><th>Goal</th>' + (isAdmin ? '<th>Membership</th>' : '') + '<th></th></tr></thead><tbody>' +
+      '<div class="table cards-sm"><table><thead><tr><th>Member</th><th>Diet</th><th>Today’s meals</th><th>Today’s workout</th><th>Goal</th>' + (isAdmin ? '<th>Membership</th>' : '') + '<th></th></tr></thead><tbody>' +
       (list.length ? list.map((m) => {
         const l = logs.filter((x) => x.member_id === m.profile_id), w = wa.find((x) => x.member_id === m.profile_id), g = X.goalStats(m), p = X.paidState(m);
         return '<tr class="click' + (m.p.active ? '' : ' off') + '" data-member="' + m.profile_id + '" data-q="' + esc((m.p.full_name + ' ' + m.p.phone).toLowerCase()) + '"><td><b>' + esc(m.p.full_name) + '</b><small>' + esc(m.p.phone) + ' · ' + esc(trainerName(m.trainer_id)) + '</small></td><td data-l="Diet">' + (m.diet_type === 'veg' ? 'Veg' : 'Non-veg') + '</td>' +
