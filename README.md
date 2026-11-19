@@ -22,3 +22,41 @@ and `demo.js` at these paths.
 python3 -m http.server 8737
 ```
 Then open http://localhost:8737.
+
+## Trial app (`app/`)
+
+A working app on Supabase for a real gym trial. Live at https://fitcheq.inraasolution.com/app/.
+Everyone signs in with their mobile number and a password the owner gives them.
+
+| Role | Can do |
+| --- | --- |
+| Owner (admin) | Members (add, edit, payments, reminders, reset password, switch login off), trainers, weekly veg and non-veg diet plans, workouts, facilities, events, messages, gym profile |
+| Trainer | See members, assign workouts for any day, mark workouts and meals done or skipped, log weight, load the weekly veg and non-veg diet plan, manage the workout library |
+| Member | Diet chart for the week, tick or skip each meal, see progress to goal and a target date, today's and the next 7 days' workouts, log weight, set target weight and veg / non-veg |
+
+| Path | What it is |
+| --- | --- |
+| `app/index.html` | Sign-in and role routing |
+| `app/js/config.js` | Supabase URL and public anon key |
+| `app/js/core.js` | Client, sign-in, goal maths, shared UI |
+| `app/js/member.js` | Member screens |
+| `app/js/staff.js` | Trainer and owner screens |
+| `supabase/migrations/` | Tables (prefixed `fq_`), row-level security, helper functions |
+| `supabase/functions/fitcheq-admin-users/` | Creates logins, resets passwords, switches logins on or off (owner only) |
+| `scripts/seed-trial.mjs` | Creates the FitFirm trial gym with sample members and history |
+
+**Where the data lives:** for the trial, Fitcheq shares the Plotskart Supabase project (Supabase's free plan allows two
+projects). Every Fitcheq table and function starts with `fq_`, so nothing touches Plotskart's tables. To move out later,
+create a new project, apply the migration there, copy the `fq_` tables, and change `app/js/config.js`.
+
+**Commands**
+```bash
+npm run test:db
+```
+```bash
+npx supabase db query --linked --project-ref yyrxjsqhmfoncunjurga -f supabase/migrations/20261119000000_fitcheq_core.sql
+```
+```bash
+npx supabase functions deploy fitcheq-admin-users --project-ref yyrxjsqhmfoncunjurga --use-api
+```
+Seeding needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the environment (kept in `.secrets/`, never committed).

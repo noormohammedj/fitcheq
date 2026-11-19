@@ -1,0 +1,18 @@
+# WARNING: the Fitcheq trial currently shares the Plotskart Supabase project (yyrxjsqhmfoncunjurga).
+# Do NOT run `supabase config push` or `supabase db push` against it from this folder; it would change Plotskart.
+# Apply SQL with: npx supabase db query --linked --project-ref <ref> -f <file>
+
+project_id = "fitcheq"
+
+[auth]
+site_url = "https://fitcheq.inraasolution.com/app/"
+additional_redirect_urls = ["http://localhost:8737/app/"]
+enable_signup = false
+minimum_password_length = 8
+
+[auth.email]
+enable_signup = false
+enable_confirmations = false
+
+[functions.fitcheq-admin-users]
+verify_jwt = true

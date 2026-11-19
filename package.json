@@ -1,0 +1,13 @@
+{
+  "name": "fitcheq",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:db": "node supabase/tests/db.test.mjs",
+    "seed": "node scripts/seed-trial.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.11",
+    "@supabase/supabase-js": "^2.45.4"
+  }
+}
