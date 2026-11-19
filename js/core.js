@@ -1,7 +1,8 @@
 /* Fitcheq app core: Supabase client, sign-in, shared helpers and small UI pieces used by every role. */
 (function () {
   const CFG = window.FQ_CONFIG;
-  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  const sb = window.FQ_MOCK_CLIENT || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { persistSession: true, autoRefreshToken: true } });
+  const isTrialPhone = (p) => /^90000000\d\d$/.test(String(p || ''));
 
   // ---------- helpers ----------
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -126,7 +127,8 @@
     const prof = await q(sb.from('fq_profiles').select('*').eq('id', session.user.id).maybeSingle());
     if (!prof || !prof.active) { await sb.auth.signOut(); return null; }
     const gym = await q(sb.from('fq_gyms').select('*').eq('id', prof.gym_id).single());
-    return { user: session.user, profile: prof, gym };
+    window.FQ_ME = { user: session.user, profile: prof, gym };
+    return window.FQ_ME;
   }
   async function adminCall(body) {
     const { data, error } = await sb.functions.invoke('fitcheq-admin-users', { body });
@@ -135,6 +137,9 @@
     return data;
   }
   function changePasswordSheet() {
+    if (window.FQ_PREVIEW) return toast('This is a preview with sample data');
+    const ph = String((window.FQ_ME && window.FQ_ME.profile.phone) || '');
+    if (isTrialPhone(ph)) return toast('Trial logins keep their password so everyone can use them');
     sheet('<h3>Change password</h3><form id="pw" class="form">' + field('New password', 'p1', '', 'type="password" minlength="8" required autocomplete="new-password"') + field('Type it again', 'p2', '', 'type="password" minlength="8" required autocomplete="new-password"') + '<button class="btn dark">Save password</button></form>', (w) => {
       w.querySelector('#pw').addEventListener('submit', async (e) => {
         e.preventDefault(); const f = formData(e.target);

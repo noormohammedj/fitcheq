@@ -27,6 +27,11 @@ Deno.serve(async (req) => {
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
 
+  // shared trial logins keep their password and stay switched on so everyone can use them
+  const isTrial = async (id: string) => {
+    const { data } = await service.from("fq_profiles").select("phone").eq("id", id).single();
+    return /^90000000\d\d$/.test(data?.phone ?? "");
+  };
   // the target account must belong to the caller's gym
   const sameGym = async (id: string) => {
     const { data } = await service.from("fq_profiles").select("gym_id").eq("id", id).single();
@@ -73,6 +78,7 @@ Deno.serve(async (req) => {
     const password = String(body.password ?? "");
     if (password.length < 8) return json({ error: "Password needs at least 8 characters" }, 400);
     if (!(await sameGym(body.user_id))) return json({ error: "Not found" }, 404);
+    if (await isTrial(body.user_id)) return json({ error: "Trial logins keep their password so everyone can use them" }, 400);
     const { error } = await service.auth.admin.updateUserById(body.user_id, { password });
     return error ? json({ error: "Could not reset the password" }, 400) : json({ ok: true });
   }
@@ -80,6 +86,7 @@ Deno.serve(async (req) => {
   if (body.action === "set_active") {
     if (body.user_id === who.user.id) return json({ error: "You cannot switch off your own login" }, 400);
     if (!(await sameGym(body.user_id))) return json({ error: "Not found" }, 404);
+    if (await isTrial(body.user_id)) return json({ error: "Trial logins stay switched on during the trial" }, 400);
     const active = !!body.active;
     await service.from("fq_profiles").update({ active }).eq("id", body.user_id);
     await service.auth.admin.updateUserById(body.user_id, { ban_duration: active ? "none" : "876000h" });

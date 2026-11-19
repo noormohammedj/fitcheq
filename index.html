@@ -24,6 +24,7 @@
         <p class="err" id="l-err" hidden></p>
         <button class="btn dark big" type="submit">Sign in</button>
       </form>
+      <div class="quick" id="quick" hidden><p class="muted small">Trying the Prozone trial? Tap to fill a login:</p><div class="btns" id="quickbtns"></div><p class="muted small"><a href="start/">See the walkthrough and all logins</a></p></div>
       <p class="muted small">Forgot your password? Ask your gym to reset it.</p>
     </div>
     <p class="foot muted small">Fitcheq by <a href="https://inraasolution.com" target="_blank" rel="noopener">Inraa Solution</a></p>
@@ -31,6 +32,7 @@
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="js/config.js"></script>
+<script src="js/mock.js"></script>
 <script src="js/core.js"></script>
 <script src="js/member.js"></script>
 <script src="js/staff.js"></script>
@@ -38,6 +40,20 @@
   (async function () {
     const X = window.FQX, root = document.getElementById('root');
     if (X.CFG.gymLabel) document.getElementById('gymlabel').textContent = X.CFG.gymLabel;
+    const acc = X.CFG.trialAccounts || [];
+    function fill(a) { document.getElementById('l-phone').value = a.phone; document.getElementById('l-pass').value = a.password; }
+    if (acc.length) {
+      document.getElementById('quick').hidden = false;
+      document.getElementById('quickbtns').innerHTML = acc.map((a, i) => '<button type="button" class="btn sm" data-i="' + i + '">' + X.esc(a.label) + '</button>').join('');
+      document.getElementById('quickbtns').addEventListener('click', (e) => { const b = e.target.closest('[data-i]'); if (b) fill(acc[+b.dataset.i]); });
+      const as = (location.hash.match(/as=(\w+)/) || [])[1], pre = acc.find((a) => a.as === as);
+      if (pre) fill(pre);
+    }
+    if (window.FQ_PREVIEW) {
+      const bar = document.createElement('div'); bar.className = 'pbar';
+      bar.innerHTML = '<span>Preview with sample data. Changes are not saved.</span><a href="start/">Walkthrough</a>';
+      document.body.prepend(bar); document.body.classList.add('preview');
+    }
     async function boot() {
       let me = null;
       try { me = await X.loadMe(); } catch (e) { X.fail(e); }
