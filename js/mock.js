@@ -1,12 +1,10 @@
 /* Fitcheq preview mode: an in-browser stand-in for Supabase with sample Prozone data, so anyone can look
    around as the owner, a trainer or a member without signing in. Nothing leaves the browser.
-   Turned on by opening the app with #preview=owner, #preview=trainer or #preview=member. */
+   Turned on only by opening the app with #preview=owner, #preview=trainer or #preview=member. */
 (function () {
-  if (/as=\w+/.test(location.hash)) { try { sessionStorage.removeItem('fq_preview'); } catch (e) {} return; }
-  const m = (location.hash.match(/preview=(owner|trainer|member)/) || [])[1];
-  const stored = (() => { try { return sessionStorage.getItem('fq_preview'); } catch (e) { return null; } })();
-  const role = m || stored; if (!role) return;
-  try { sessionStorage.setItem('fq_preview', role); } catch (e) {}
+  // only a preview link (…/#preview=owner) turns this on; the normal sign-in page is never affected
+  const role = (location.hash.match(/preview=(owner|trainer|member)/) || [])[1];
+  if (!role) return;
   window.FQ_PREVIEW = role;
 
   // ---------- sample data (same shape as the database) ----------
@@ -158,7 +156,7 @@
     auth: {
       getSession: async () => ({ data: { session } }),
       signInWithPassword: async () => ({ error: null }),
-      signOut: async () => { try { sessionStorage.removeItem('fq_preview'); } catch (e) {} location.hash = ''; return { error: null }; },
+      signOut: async () => { history.replaceState(null, '', location.pathname); return { error: null }; },
       updateUser: async () => ({ error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
