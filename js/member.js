@@ -81,14 +81,14 @@
     let strip = '';
     for (let i = 0; i < 7; i++) {
       const di = addDays(base, i), ms = mealsFor(di), dn = ms.filter((x) => logOf(di, x.id) === 'done').length, any = ms.some((x) => logOf(di, x.id));
-      const dot = di > t || !any ? '' : dn >= ms.length - 1 ? 'ok' : dn >= ms.length / 2 ? 'mid' : 'no';
+      const dot = di > t || !any ? '' : dn >= ms.length - 1 ? 'ok' : dn >= ms.length / 2 ? 'mid' : key(di) === key(t) ? '' : 'no';
       strip += '<button class="day' + (i === dietDay ? ' sel' : '') + (key(di) === key(t) ? ' today' : '') + '" data-day="' + i + '"><span>' + WD[i][0] + '</span><b>' + di.getDate() + '</b><i class="' + dot + '"></i></button>';
     }
     const ms = mealsFor(d), kc = ms.reduce((s, x) => s + (x.kcal || 0), 0), pr = ms.reduce((s, x) => s + (x.protein_g || 0), 0);
     return '<header class="top"><span class="muted">' + (S.m.diet_type === 'veg' ? 'Vegetarian' : 'Non-vegetarian') + ' plan · <button class="link" data-tab="progress">change</button></span><h1>Diet</h1></header>' +
       '<div class="seg2"><button class="' + (dietWeek === 0 ? 'on' : '') + '" data-week="0">This week</button><button class="' + (dietWeek === 1 ? 'on' : '') + '" data-week="1">Next week</button></div>' +
       '<div class="days">' + strip + '</div>' +
-      '<div class="dayhead"><b>' + (key(d) === key(t) ? 'Today' : WDL[dietDay] + ' ' + fmt(d)) + '</b><span class="muted small">' + (kc ? kc + ' kcal · ' : '') + (pr ? pr + ' g protein' : '') + '</span></div>' +
+      '<div class="dayhead"><b>' + (key(d) === key(t) ? 'Today' : WDL[dietDay] + ' ' + fmt(d)) + '</b><span class="muted small">' + [kc ? kc + ' kcal' : '', pr ? pr + ' g protein' : ''].filter(Boolean).join(' · ') + '</span></div>' +
       mealRows(d, editable) + (d > t ? '<p class="muted small center">You can tick meals on the day.</p>' : !editable ? '<p class="muted small center">Days older than a week can’t be changed.</p>' : '');
   }
   function vWorkouts() {
