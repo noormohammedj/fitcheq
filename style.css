@@ -60,7 +60,8 @@ a { color: var(--fg); }
 .lbox { width: 100%; max-width: 380px; }
 .brand { font-weight: 800; font-size: 26px; letter-spacing: -0.03em; }
 .brand span { color: var(--ok); }
-.login h1 { font-size: 30px; margin: 26px 0 4px; letter-spacing: -0.02em; }
+.login h1 { font-size: 30px; margin: 4px 0 4px; letter-spacing: -0.02em; }
+.gymlabel { margin: 26px 0 0; font-weight: 600; color: var(--muted); }
 .login .form { margin: 22px 0 16px; }
 .login .foot { margin-top: 40px; }
 

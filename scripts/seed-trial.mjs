@@ -1,4 +1,4 @@
-// Creates the FitFirm trial gym: owner, trainers, members, a week of veg and non-veg diet, workouts,
+// Creates the Prozone (Dindigul) trial gym: owner, trainers, members, a week of veg and non-veg diet, workouts,
 // facilities and events, plus two weeks of history so the app looks lived-in on day one.
 // Logins are written to .secrets/trial-logins.md (never committed).
 //   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npm run seed
@@ -10,7 +10,7 @@ const URL_ = process.env.SUPABASE_URL, KEY = process.env.SUPABASE_SERVICE_ROLE_K
 if (!URL_ || !KEY) { console.error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY'); process.exit(1); }
 const sb = createClient(URL_, KEY, { auth: { persistSession: false } });
 const DOMAIN = 'login.fitcheq.inraasolution.com';
-const APP_URL = process.env.APP_URL || 'https://fitcheq.inraasolution.com/app/';
+const APP_URL = process.env.APP_URL || 'https://fitcheq.inraasolution.com/';
 const must = async (p) => { const r = await p; if (r.error) throw r.error; return r.data; };
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -22,7 +22,7 @@ const pass = () => { const a = 'abcdefghjkmnpqrstuvwxyz23456789'; let s = ''; fo
 let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
 // ---------- people ----------
-const OWNER = { name: 'FitFirm Owner', phone: '9000000001' };
+const OWNER = { name: 'Prozone Owner', phone: '9000000001' };
 const TRAINERS = [
   { name: 'Priya Raman', phone: '9000000011', t: { speciality: 'Fat loss and nutrition', experience_years: 8, certifications: 'ACE CPT, Precision Nutrition L1', slots: '6–10 am, 5–8 pm', bio: 'Helps members lose fat without crash diets.' } },
   { name: 'Karthik Selvam', phone: '9000000012', t: { speciality: 'Strength and muscle gain', experience_years: 6, certifications: 'NSCA-CPT', slots: '7–11 am, 6–9 pm', bio: 'Powerlifting coach; loves teaching technique.' } },
@@ -74,9 +74,9 @@ async function userFor(name, phone, password) {
 }
 
 async function main() {
-  const old = await must(sb.from('fq_gyms').select('id').eq('name', 'FitFirm'));
+  const old = await must(sb.from('fq_gyms').select('id').in('name', ['FitFirm', 'Prozone']));
   for (const g of old) await must(sb.from('fq_gyms').delete().eq('id', g.id));
-  const gym = await must(sb.from('fq_gyms').insert({ name: 'FitFirm', address: 'Add your address in Gym profile', phone: '+91 90000 00001', hours: 'Mon–Sat 5:30 am–10 pm · Sun 6 am–12 pm', about: 'Strength floor, cardio, functional zone and personal training.' }).select().single());
+  const gym = await must(sb.from('fq_gyms').insert({ name: 'Prozone', address: 'Dindigul, Tamil Nadu', phone: '+91 90000 00001', hours: 'Mon–Sat 5:30 am–10 pm · Sun 6 am–12 pm', about: 'Strength floor, cardio, functional zone and personal training.' }).select().single());
   const G = gym.id, creds = [];
 
   const ownerPw = pass(), ownerId = await userFor(OWNER.name, OWNER.phone, ownerPw);
@@ -137,11 +137,11 @@ async function main() {
     { gym_id: G, title: 'Body composition check', starts_on: key(add(today, 9)), starts_at: '09:00', details: 'Free scan with your trainer. Book a slot at the desk.', created_by: ownerId },
     { gym_id: G, title: '30-day transformation challenge', starts_on: key(add(today, 14)), details: 'Top 3 transformations win a free month.', created_by: ownerId },
   ]));
-  await must(sb.from('fq_notices').insert({ gym_id: G, kind: 'general', title: 'Welcome to the FitFirm app', body: 'Tick your meals, mark your workouts and log your weight. Your trainer sees it straight away.', created_by: ownerId }));
+  await must(sb.from('fq_notices').insert({ gym_id: G, kind: 'general', title: 'Welcome to the Prozone app', body: 'Tick your meals, mark your workouts and log your weight. Your trainer sees it straight away.', created_by: ownerId }));
 
   mkdirSync(new URL('../.secrets/', import.meta.url), { recursive: true });
-  const md = '# FitFirm trial logins\n\nApp: ' + APP_URL + '\nCreated: ' + key(today) + '. Keep this private. Ask users to change their password after first sign-in.\n\n| Role | Name | Mobile | Password |\n| --- | --- | --- | --- |\n' + creds.map((c) => '| ' + c.join(' | ') + ' |').join('\n') + '\n';
+  const md = '# Prozone, Dindigul: trial logins\n\nApp: ' + APP_URL + '\nCreated: ' + key(today) + '. Keep this private. Ask users to change their password after first sign-in.\n\n| Role | Name | Mobile | Password |\n| --- | --- | --- | --- |\n' + creds.map((c) => '| ' + c.join(' | ') + ' |').join('\n') + '\n';
   writeFileSync(new URL('../.secrets/trial-logins.md', import.meta.url), md, { mode: 0o600 });
-  console.log('Seeded FitFirm: 1 owner, ' + TRAINERS.length + ' trainers, ' + MEMBERS.length + ' members. Logins written to .secrets/trial-logins.md');
+  console.log('Seeded Prozone: 1 owner, ' + TRAINERS.length + ' trainers, ' + MEMBERS.length + ' members. Logins written to .secrets/trial-logins.md');
 }
 main().catch((e) => { console.error(e.message || e); process.exit(1); });

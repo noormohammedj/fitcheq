@@ -1,62 +1,10 @@
 <!doctype html>
 <html lang="en">
-<head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#ffffff">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fitcheq</title>
 <meta name="robots" content="noindex">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<div id="root">
-  <div class="login" id="login">
-    <div class="lbox">
-      <div class="brand">fitcheq<span>.</span></div>
-      <h1>Sign in</h1>
-      <p class="muted">Use the mobile number and password your gym gave you.</p>
-      <form id="f-login" class="form" novalidate>
-        <label class="fld"><span>Mobile number</span><input id="l-phone" name="phone" inputmode="numeric" autocomplete="username" placeholder="10-digit number" required></label>
-        <label class="fld"><span>Password</span><input id="l-pass" name="password" type="password" autocomplete="current-password" required></label>
-        <p class="err" id="l-err" hidden></p>
-        <button class="btn dark big" type="submit">Sign in</button>
-      </form>
-      <p class="muted small">Forgot your password? Ask your gym to reset it.</p>
-    </div>
-    <p class="foot muted small">Fitcheq by <a href="https://inraasolution.com" target="_blank" rel="noopener">Inraa Solution</a></p>
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="js/config.js"></script>
-<script src="js/core.js"></script>
-<script src="js/member.js"></script>
-<script src="js/staff.js"></script>
-<script>
-  (async function () {
-    const X = window.FQX, root = document.getElementById('root');
-    async function boot() {
-      let me = null;
-      try { me = await X.loadMe(); } catch (e) { X.fail(e); }
-      if (!me) { root.querySelector('#login') && (root.querySelector('#login').hidden = false); return; }
-      document.title = me.gym.name + ' · Fitcheq';
-      if (me.profile.role === 'member') FQMember.start(me, root); else FQStaff.start(me, root);
-    }
-    document.getElementById('f-login').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const err = document.getElementById('l-err'), b = e.target.querySelector('button');
-      const phone = X.phone10(e.target.phone.value), pass = e.target.password.value;
-      err.hidden = true;
-      if (phone.length !== 10) { err.textContent = 'Enter your 10-digit mobile number.'; err.hidden = false; return; }
-      if (!pass) { err.textContent = 'Enter your password.'; err.hidden = false; return; }
-      b.disabled = true; b.textContent = 'Signing in…';
-      try { await X.signIn(phone, pass); await boot(); }
-      catch (ex) { err.textContent = ex.message; err.hidden = false; b.disabled = false; b.textContent = 'Sign in'; }
-    });
-    X.sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT') location.reload(); });
-    boot();
-  })();
-</script>
-</body>
+<script>location.replace('/' + location.hash);</script>
+<noscript><meta http-equiv="refresh" content="0; url=/"></noscript>
+<p style="font-family:sans-serif;padding:24px">The app has moved to <a href="/">fitcheq.inraasolution.com</a>.</p>
 </html>

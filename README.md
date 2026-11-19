@@ -6,16 +6,17 @@ Plain HTML, CSS and JavaScript with sample data. No build step. Hosted on GitHub
 
 | File | What it is |
 | --- | --- |
-| `index.html` | Sales site with live, self-playing app demos and pricing |
-| `member.html` | Member app prototype (Today, Diet, Progress, Gym, Account) |
-| `admin.html` | Owner console prototype (members, trainers, sessions, diet plans, equipment, promotions, billing) |
+| `index.html`, `js/`, `style.css` | The live trial app (sign in at https://fitcheq.inraasolution.com) |
+| `demo/` | Sales site with live, self-playing app demos and pricing (https://fitcheq.inraasolution.com/demo/) |
+| `demo/member.html` | Member app prototype (Today, Diet, Progress, Gym, Account) |
+| `demo/admin.html` | Owner console prototype (members, trainers, sessions, diet plans, equipment, promotions, billing) |
 | `data.js` | Sample gym data, diet and workout generator, weight projection model, shared state |
 | `app.js` / `app.css` | Member app |
 | `admin.js` / `admin.css` | Owner console |
 | `demo.js` | Plays scripted taps inside the live app for the sales site |
 
-The Inraa Solution website embeds the member app from this site, so keep `data.js`, `app.js`, `app.css`
-and `demo.js` at these paths.
+The Inraa Solution website embeds the demo member app from `demo/`, so keep `demo/data.js`, `demo/app.js`,
+`demo/app.css` and `demo/demo.js` at these paths.
 
 ## Run locally
 ```bash
@@ -23,9 +24,9 @@ python3 -m http.server 8737
 ```
 Then open http://localhost:8737.
 
-## Trial app (`app/`)
+## Trial app (site root)
 
-A working app on Supabase for a real gym trial. Live at https://fitcheq.inraasolution.com/app/.
+A working app on Supabase for the Prozone, Dindigul trial. Live at https://fitcheq.inraasolution.com/ (the old `/app/` link redirects there).
 Everyone signs in with their mobile number and a password the owner gives them.
 
 | Role | Can do |
@@ -36,18 +37,18 @@ Everyone signs in with their mobile number and a password the owner gives them.
 
 | Path | What it is |
 | --- | --- |
-| `app/index.html` | Sign-in and role routing |
-| `app/js/config.js` | Supabase URL and public anon key |
-| `app/js/core.js` | Client, sign-in, goal maths, shared UI |
-| `app/js/member.js` | Member screens |
-| `app/js/staff.js` | Trainer and owner screens |
+| `index.html` | Sign-in and role routing |
+| `js/config.js` | Supabase URL and public anon key |
+| `js/core.js` | Client, sign-in, goal maths, shared UI |
+| `js/member.js` | Member screens |
+| `js/staff.js` | Trainer and owner screens |
 | `supabase/migrations/` | Tables (prefixed `fq_`), row-level security, helper functions |
 | `supabase/functions/fitcheq-admin-users/` | Creates logins, resets passwords, switches logins on or off (owner only) |
-| `scripts/seed-trial.mjs` | Creates the FitFirm trial gym with sample members and history |
+| `scripts/seed-trial.mjs` | Creates the Prozone (Dindigul) trial gym with sample members and history |
 
 **Where the data lives:** for the trial, Fitcheq shares the Plotskart Supabase project (Supabase's free plan allows two
 projects). Every Fitcheq table and function starts with `fq_`, so nothing touches Plotskart's tables. To move out later,
-create a new project, apply the migration there, copy the `fq_` tables, and change `app/js/config.js`.
+create a new project, apply the migration there, copy the `fq_` tables, and change `js/config.js`.
 
 **Commands**
 ```bash

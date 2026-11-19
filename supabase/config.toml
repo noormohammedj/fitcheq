@@ -5,8 +5,8 @@
 project_id = "fitcheq"
 
 [auth]
-site_url = "https://fitcheq.inraasolution.com/app/"
-additional_redirect_urls = ["http://localhost:8737/app/"]
+site_url = "https://fitcheq.inraasolution.com/"
+additional_redirect_urls = ["http://localhost:8737/"]
 enable_signup = false
 minimum_password_length = 8
 
