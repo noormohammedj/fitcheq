@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<meta name="robots" content="noindex">
+<title>Walkthrough recorder</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  /* 1280 x 720 frames for the walkthrough video: caption on the left, the real app (sample data) on the right. */
+  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: #fff; font-family: "Inter", -apple-system, sans-serif; color: #161616; }
+  .wrap { display: grid; grid-template-columns: 470px 1fr; height: 720px; }
+  .cap { padding: 64px 40px 48px 64px; display: flex; flex-direction: column; }
+  .brand { font-weight: 800; font-size: 22px; letter-spacing: -0.03em; }
+  .brand span { color: #2a9d4a; }
+  .gym { color: #6e6e73; font-weight: 600; font-size: 15px; margin-top: 2px; }
+  .chap { margin-top: 70px; display: inline-flex; align-self: flex-start; font-size: 14px; font-weight: 700; padding: 6px 14px; border-radius: 99px; background: #161616; color: #fff; letter-spacing: .02em; }
+  .chap.owner { background: #1f63c6; } .chap.trainer { background: #b26b07; } .chap.member { background: #2a9d4a; }
+  h1 { font-size: 44px; line-height: 1.08; letter-spacing: -0.03em; margin: 18px 0 0; }
+  p { font-size: 21px; line-height: 1.45; color: #4a4a4f; margin: 18px 0 0; }
+  .step { margin-top: auto; display: flex; gap: 6px; }
+  .step i { width: 22px; height: 5px; border-radius: 3px; background: #e5e5ea; }
+  .step i.on { background: #161616; }
+  .stage { background: #f2f2f7; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .phone { width: 375px; height: 790px; border-radius: 54px; background: #111; padding: 11px; transform: scale(.82); transform-origin: center; box-shadow: 0 30px 60px -24px rgba(0,0,0,.35); }
+  .phone iframe { width: 100%; height: 100%; border: 0; border-radius: 44px; background: #fff; }
+  .laptop { width: 1280px; height: 800px; transform: scale(.6); transform-origin: center; background: #111; padding: 16px; border-radius: 22px; box-shadow: 0 30px 60px -24px rgba(0,0,0,.35); flex: none; }
+  .laptop iframe { width: 100%; height: 100%; border: 0; border-radius: 6px; background: #fff; }
+  .dot { position: absolute; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(22,22,22,.2); border: 3px solid rgba(22,22,22,.5); pointer-events: none; display: none; z-index: 5; }
+  .end { position: absolute; inset: 0; background: #fff; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; z-index: 9; }
+  .end h2 { font-size: 52px; letter-spacing: -0.03em; margin: 0; }
+  .end p { margin-top: 16px; }
+  .end b.url { display: block; margin-top: 26px; font-size: 32px; color: #161616; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="cap"><div class="brand">fitcheq<span>.</span></div><div class="gym">Prozone · Dindigul</div><span class="chap" id="chap">Owner</span><h1 id="title">Title</h1><p id="text">Text</p><div class="step" id="step"></div></div>
+  <div class="stage" id="stage"><div class="dot" id="dot"></div></div>
+</div>
+<div class="end" id="end"><div class="brand" style="font-size:34px">fitcheq<span>.</span></div><h2 style="margin-top:28px">Try it yourself</h2><p>Open the link, tap Owner, Trainer or Member,<br>and sign in with the sample login.</p><b class="url">fitcheq.inraasolution.com/start</b></div>
+<script>
+  let role = null, device = null;
+  const stage = document.getElementById('stage');
+  window.frameDoc = () => { const f = stage.querySelector('iframe'); return f && f.contentDocument; };
+  window.scene = function (o) {
+    document.getElementById('end').style.display = o.end ? 'flex' : 'none';
+    if (o.end) return Promise.resolve();
+    const c = document.getElementById('chap'); c.textContent = { owner: 'Gym owner', trainer: 'Trainer', member: 'Member' }[o.role]; c.className = 'chap ' + o.role;
+    document.getElementById('title').textContent = o.title; document.getElementById('text').textContent = o.text;
+    document.getElementById('step').innerHTML = Array.from({ length: o.of }, (_, i) => '<i class="' + (i < o.n ? 'on' : '') + '"></i>').join('');
+    document.getElementById('dot').style.display = 'none';
+    if (o.role === role && o.device === device) return Promise.resolve();
+    role = o.role; device = o.device;
+    [...stage.querySelectorAll('.phone,.laptop')].forEach((e) => e.remove());
+    const box = document.createElement('div'); box.className = o.device;
+    box.innerHTML = '<iframe src="../?r=' + o.role + Date.now() + '#preview=' + o.role + '" title="Fitcheq app"></iframe>';
+    stage.appendChild(box);
+    return new Promise((r) => box.querySelector('iframe').addEventListener('load', () => setTimeout(r, 1200)));
+  };
+  // show a tap marker over an element inside the app, then click it
+  window.tap = function (sel, click = true) {
+    const d = frameDoc(), el = typeof sel === 'string' ? d.querySelector(sel) : sel; if (!el) return 'missing ' + sel;
+    el.scrollIntoView({ block: 'center' });
+    const f = stage.querySelector('iframe'), box = f.parentElement, k = box.getBoundingClientRect().width / box.offsetWidth;
+    const fr = f.getBoundingClientRect(), r = el.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    const dot = document.getElementById('dot'); dot.style.display = 'block';
+    dot.style.left = (fr.left - sr.left + (r.left + r.width / 2) * k) + 'px'; dot.style.top = (fr.top - sr.top + (r.top + r.height / 2) * k) + 'px';
+    if (click) el.click();
+    return 'ok';
+  };
+  window.hideDot = () => { document.getElementById('dot').style.display = 'none'; };
+</script>
+</body>
+</html>

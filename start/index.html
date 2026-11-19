@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prozone · Fitcheq trial</title>
+<meta name="description" content="Your 7-day Fitcheq trial for Prozone, Dindigul: walkthrough video, sample logins and what to try.">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+  /* Trial welcome page. One column, plain: video first, then logins, then what to try. */
+  :root { color-scheme: light; --fg: #161616; --muted: #6e6e73; --faint: #a1a1a6; --bg: #fff; --surface: #f2f2f7; --line: #e5e5ea; --ok: #2a9d4a; --ok-soft: #e6f5ea; --own: #1f63c6; --tr: #b26b07; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 "Inter", -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+  .in { max-width: 860px; margin: 0 auto; padding-left: max(18px, env(safe-area-inset-left)); padding-right: max(18px, env(safe-area-inset-right)); }
+  header { padding-block: max(22px, env(safe-area-inset-top)) 0; display: flex; justify-content: space-between; align-items: center; }
+  .brand { font-weight: 800; font-size: 22px; letter-spacing: -0.03em; } .brand span { color: var(--ok); }
+  .gym { font-weight: 600; color: var(--muted); font-size: 14px; }
+  h1 { font-size: clamp(32px, 6vw, 46px); line-height: 1.08; letter-spacing: -0.03em; margin: 34px 0 10px; text-wrap: balance; }
+  h2 { font-size: 24px; letter-spacing: -0.02em; margin: 48px 0 6px; }
+  .lead { font-size: 18px; color: #3d3d42; margin: 0; max-width: 36em; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  video { width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; background: #f2f2f7; display: block; margin-top: 26px; border: 1px solid var(--line); }
+  .chapters { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; font-size: 14px; }
+  .chapters button { border: 1px solid var(--line); background: #fff; border-radius: 99px; padding: 6px 12px; font: inherit; font-size: 13.5px; cursor: pointer; color: var(--fg); }
+  .chapters button:hover { border-color: var(--fg); }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 10px; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 30px 1fr; gap: 12px; }
+  .steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; background: var(--fg); color: #fff; font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+  .accs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .acc { border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 6px; }
+  .acc .role { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .acc.owner .role { color: var(--own); } .acc.trainer .role { color: var(--tr); } .acc.member .role { color: var(--ok); }
+  .acc b { font-size: 18px; }
+  .acc dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0 4px; font-size: 15px; }
+  .acc dt { color: var(--muted); }
+  .acc dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; user-select: all; word-break: break-all; }
+  .acc .can { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 16px; border-radius: 11px; border: 0; font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; background: var(--surface); color: var(--fg); }
+  .btn.dark { background: var(--fg); color: #fff; }
+  .acc .btn { margin-top: auto; }
+  .acc .copy { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; align-self: flex-start; }
+  .note { background: var(--surface); border-radius: 12px; padding: 14px 16px; margin-top: 14px; font-size: 15px; }
+  .try { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+  .try div { border-top: 3px solid var(--fg); padding-top: 12px; }
+  .try div.owner { border-color: var(--own); } .try div.trainer { border-color: var(--tr); } .try div.member { border-color: var(--ok); }
+  .try b { display: block; margin-bottom: 6px; }
+  .try ul { margin: 0; padding-left: 18px; font-size: 15px; color: #3d3d42; display: grid; gap: 4px; }
+  .peek { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .contact { margin: 56px 0 0; padding-block: 28px max(36px, env(safe-area-inset-bottom)); border-top: 1px solid var(--line); color: var(--muted); font-size: 15px; }
+  .contact b { color: var(--fg); user-select: all; }
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+  :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  @media (max-width: 720px) { .accs, .try { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="in">
+  <header><div class="brand">fitcheq<span>.</span></div><div class="gym">Prozone · Dindigul</div></header>
+
+  <h1>Your gym app is ready. Try it for 7 days.</h1>
+  <p class="lead">Watch the 2-minute walkthrough, then sign in as the owner, a trainer and a member using the sample logins below. It works on any phone or computer; nothing to install.</p>
+  <div class="cta"><a class="btn dark" href="../" id="open">Open the app</a><a class="btn" href="#logins">See the logins</a></div>
+
+  <video id="vid" controls playsinline preload="metadata" poster="walkthrough.jpg"><source src="walkthrough.mp4" type="video/mp4">Your browser can’t play this video. Open the app and sign in with a login below.</video>
+  <div class="chapters"><span class="sub" style="margin:6px 4px 0 0">Jump to:</span><button data-t="0">Gym owner</button><button data-t="27">Trainer</button><button data-t="45">Member</button></div>
+
+  <h2>How to start</h2>
+  <ol class="steps">
+    <li><span>Open <b>fitcheq.inraasolution.com</b> on your phone. Add it to your home screen if you like.</span></li>
+    <li><span>Tap <b>Owner</b>, <b>Trainer</b> or <b>Member</b> under “Trying the Prozone trial?” The mobile number and password fill in by themselves.</span></li>
+    <li><span>Tap <b>Sign in</b>. To switch roles, use <b>Sign out</b> and pick another login.</span></li>
+  </ol>
+
+  <h2 id="logins">Sample logins</h2>
+  <p class="sub">Everyone uses a mobile number and a password. These sample logins are shared for the trial, so their passwords can’t be changed.</p>
+  <div class="accs" id="accs"></div>
+  <div class="note">The 5 members you see (Arjun, Meera, Sameer, Divya and Rahul) are sample people with two weeks of history. To try it with your real members, sign in as the owner and use <b>Add member</b>. The app creates their login and gives you a WhatsApp message to send them.</div>
+
+  <h2>What to try this week</h2>
+  <div class="try">
+    <div class="owner"><b>As the owner</b><ul><li>Add a real member and a trainer</li><li>Record a payment and send a payment reminder</li><li>Add an event, like a Sunday bootcamp</li><li>Update facilities and your gym profile</li></ul></div>
+    <div class="trainer"><b>As a trainer</b><ul><li>Load next week’s veg and non-veg diet</li><li>Assign a workout to a member for the week</li><li>Mark what a member did today</li><li>Log a member’s weight</li></ul></div>
+    <div class="member"><b>As a member</b><ul><li>Tick or skip today’s meals</li><li>See how close you are to your goal</li><li>Check today’s and the next 7 days’ workouts</li><li>Log your weight; switch veg or non-veg</li></ul></div>
+  </div>
+
+  <h2>Just want a quick look?</h2>
+  <p class="sub">Open a preview filled with sample data. No login needed, and nothing you change is saved.</p>
+  <div class="peek"><a class="btn" href="../#preview=owner">Preview as owner</a><a class="btn" href="../#preview=trainer">Preview as trainer</a><a class="btn" href="../#preview=member">Preview as member</a></div>
+
+  <div class="contact">Questions or feedback after the trial? Call or WhatsApp <b>+91 96298 43122</b> or email <b>noormohammed.j@gmail.com</b>. Fitcheq is a Result as a Service product by <a href="https://inraasolution.com" style="color:inherit">Inraa Solution</a>.</div>
+</div>
+<script src="../js/config.js"></script>
+<script>
+  (function () {
+    const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    const CAN = { owner: 'Members, payments, reminders, trainers, events, facilities', trainer: 'Diet plans, workouts, member progress', member: 'Diet, workouts, progress to goal' };
+    const acc = (window.FQ_CONFIG && FQ_CONFIG.trialAccounts) || [];
+    document.getElementById('accs').innerHTML = acc.map((a) => '<div class="acc ' + a.as + '"><span class="role">' + esc(a.label) + '</span><b>' + esc(a.name) + '</b><p class="can">' + CAN[a.as] + '</p><dl><dt>Mobile</dt><dd>' + esc(a.phone) + '</dd><dt>Password</dt><dd>' + esc(a.password) + '</dd></dl><button class="copy" type="button" data-copy="' + esc('Mobile: ' + a.phone + '  Password: ' + a.password) + '">Copy login</button><a class="btn dark" href="../#as=' + a.as + '">Sign in as ' + esc(a.label.toLowerCase()) + '</a></div>').join('');
+    document.addEventListener('click', async (e) => {
+      const c = e.target.closest('[data-copy]'); if (c) { try { await navigator.clipboard.writeText(c.dataset.copy); c.textContent = 'Copied'; } catch (err) { c.textContent = c.dataset.copy; } setTimeout(() => (c.textContent = 'Copy login'), 2000); }
+      const t = e.target.closest('[data-t]'); if (t) { const v = document.getElementById('vid'); v.currentTime = +t.dataset.t; v.play().catch(() => {}); v.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    });
+  })();
+</script>
+</body>
+</html>

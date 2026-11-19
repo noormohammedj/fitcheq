@@ -25,7 +25,7 @@
     const ws = key(monday(d)), p = S.plans.find((x) => x.week_start === ws && x.diet_type === S.m.diet_type);
     if (!p) return [];
     const di = dayIdx(d);
-    return MEALS.map(([id, name, time]) => { const it = p.fq_diet_items.find((x) => x.day === di && x.meal === id); return it ? { id, name, time, ...it } : null; }).filter(Boolean);
+    return MEALS.map(([id, name, time]) => { const it = p.fq_diet_items.find((x) => x.day === di && x.meal === id); return it ? { ...it, id, name, time } : null; }).filter(Boolean);
   }
   function adherence(days) {
     const since = key(addDays(today(), -(days || 14)));

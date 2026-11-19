@@ -2,6 +2,7 @@
    around as the owner, a trainer or a member without signing in. Nothing leaves the browser.
    Turned on by opening the app with #preview=owner, #preview=trainer or #preview=member. */
 (function () {
+  if (/as=\w+/.test(location.hash)) { try { sessionStorage.removeItem('fq_preview'); } catch (e) {} return; }
   const m = (location.hash.match(/preview=(owner|trainer|member)/) || [])[1];
   const stored = (() => { try { return sessionStorage.getItem('fq_preview'); } catch (e) { return null; } })();
   const role = m || stored; if (!role) return;

@@ -51,11 +51,13 @@
     }
     if (window.FQ_PREVIEW) {
       const bar = document.createElement('div'); bar.className = 'pbar';
-      bar.innerHTML = '<span>Preview with sample data. Changes are not saved.</span><a href="start/">Walkthrough</a>';
+      bar.innerHTML = '<span>Sample data · nothing is saved</span><a href="start/">Walkthrough</a>';
       document.body.prepend(bar); document.body.classList.add('preview');
     }
     async function boot() {
       let me = null;
+      // a 'Sign in as …' link starts a fresh sign-in, even if someone else was signed in on this phone
+      if (/as=\w+/.test(location.hash) && !window.FQ_PREVIEW && !boot.done) { boot.done = true; const { data: { session } } = await X.sb.auth.getSession(); if (session) await X.sb.auth.signOut({ scope: 'local' }); }
       try { me = await X.loadMe(); } catch (e) { X.fail(e); }
       if (!me) { root.querySelector('#login') && (root.querySelector('#login').hidden = false); return; }
       document.title = me.gym.name + ' · Fitcheq';
