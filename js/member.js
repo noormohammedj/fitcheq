@@ -4,28 +4,28 @@
   let S = null, tab = 'today', dietWeek = 0, dietDay = dayIdx(today()), root;
 
   async function load(me) {
-    const uid = me.user.id, t0 = today(), wk = monday(t0);
-    const from = key(addDays(t0, -21)), to = key(addDays(t0, 7));
-    const [m, trainers, plans, logs, wa, weights, notices, events, fac] = await Promise.all([
+    const uid = me.user.id, t0 = today();
+    const from = key(addDays(t0, -21)), to = key(addDays(t0, 14));
+    const [m, trainers, meals, logs, wa, weights, notices, events, fac, fees] = await Promise.all([
       q(sb.from('fq_members').select('*').eq('profile_id', uid).single()),
       q(sb.from('fq_profiles').select('id, full_name, phone, role, fq_trainers(*)').in('role', ['trainer', 'admin'])),
-      q(sb.from('fq_diet_plans').select('id, week_start, diet_type, fq_diet_items(*)').in('week_start', [key(wk), key(addDays(wk, 7))])),
+      q(sb.from('fq_member_meals').select('*').eq('member_id', uid).gte('on_date', from).lte('on_date', to)),
       q(sb.from('fq_diet_logs').select('*').eq('member_id', uid).gte('on_date', from)),
       q(sb.from('fq_workout_assignments').select('*').eq('member_id', uid).gte('on_date', from).lte('on_date', to).order('on_date')),
       q(sb.from('fq_weight_logs').select('*').eq('member_id', uid).order('on_date')),
       q(sb.from('fq_notices').select('*').order('created_at', { ascending: false }).limit(20)),
       q(sb.from('fq_events').select('*').gte('starts_on', key(t0)).order('starts_on').limit(10)),
       q(sb.from('fq_facilities').select('*').order('category')),
+      q(sb.from('fq_fee_plans').select('*').eq('active', true).order('months')),
     ]);
-    S = { me, m, trainers, plans, logs, wa, weights, notices, events, fac };
+    S = { me, m, trainers, meals, logs, wa, weights, notices, events, fac, fees };
   }
   const coach = () => S.trainers.find((t) => t.id === S.m.trainer_id);
   const logOf = (d, meal) => (S.logs.find((l) => l.on_date === key(d) && l.meal === meal) || {}).status;
+  // the meals this member's trainer set for that date, in meal order
   function mealsFor(d) {
-    const ws = key(monday(d)), p = S.plans.find((x) => x.week_start === ws && x.diet_type === S.m.diet_type);
-    if (!p) return [];
-    const di = dayIdx(d);
-    return MEALS.map(([id, name, time]) => { const it = p.fq_diet_items.find((x) => x.day === di && x.meal === id); return it ? { ...it, id, name, time } : null; }).filter(Boolean);
+    const dk = key(d);
+    return MEALS.map(([id, name, time]) => { const it = S.meals.find((x) => x.on_date === dk && x.meal === id); return it ? { ...it, id, name, time } : null; }).filter(Boolean);
   }
   function adherence(days) {
     const since = key(addDays(today(), -(days || 14)));
@@ -46,7 +46,7 @@
   }
   function mealRows(d, editable) {
     const ms = mealsFor(d);
-    if (!ms.length) return '<div class="empty">Your coach hasn’t loaded the ' + (S.m.diet_type === 'veg' ? 'veg' : 'non-veg') + ' plan for this week yet.</div>';
+    if (!ms.length) return '<div class="empty">Your trainer hasn’t set your meals for this day yet.</div>';
     return '<div class="group">' + ms.map((x) => {
       const s = logOf(d, x.id);
       return '<div class="row meal ' + (s || '') + '">' + (editable ? '<button class="chk ' + (s === 'done' ? 'on' : '') + '" data-meal="' + x.id + '" data-d="' + key(d) + '" data-v="done" aria-label="I had ' + esc(x.name) + '">' + ic('check') + '</button>' : '<span class="chk ghost"></span>') +
@@ -85,7 +85,7 @@
       strip += '<button class="day' + (i === dietDay ? ' sel' : '') + (key(di) === key(t) ? ' today' : '') + '" data-day="' + i + '"><span>' + WD[i][0] + '</span><b>' + di.getDate() + '</b><i class="' + dot + '"></i></button>';
     }
     const ms = mealsFor(d), kc = ms.reduce((s, x) => s + (x.kcal || 0), 0), pr = ms.reduce((s, x) => s + (x.protein_g || 0), 0);
-    return '<header class="top"><span class="muted">' + (S.m.diet_type === 'veg' ? 'Vegetarian' : 'Non-vegetarian') + ' plan · <button class="link" data-tab="progress">change</button></span><h1>Diet</h1></header>' +
+    return '<header class="top"><span class="muted">Your own plan from ' + esc((coach() || {}).full_name || 'your trainer') + ' · ' + (S.m.diet_type === 'veg' ? 'vegetarian' : 'non-veg') + '</span><h1>Diet</h1></header>' +
       '<div class="seg2"><button class="' + (dietWeek === 0 ? 'on' : '') + '" data-week="0">This week</button><button class="' + (dietWeek === 1 ? 'on' : '') + '" data-week="1">Next week</button></div>' +
       '<div class="days">' + strip + '</div>' +
       '<div class="dayhead"><b>' + (key(d) === key(t) ? 'Today' : WDL[dietDay] + ' ' + fmt(d)) + '</b><span class="muted small">' + [kc ? kc + ' kcal' : '', pr ? pr + ' g protein' : ''].filter(Boolean).join(' · ') + '</span></div>' +
@@ -103,24 +103,27 @@
       (past.length ? '<div class="card"><b>' + done + ' of ' + past.length + '</b> workouts done in the last 2 weeks' + X.bar(past.length ? (done / past.length) * 100 : 0, 'green') + '</div>' : '') + h;
   }
   function vProgress() {
-    const g = goalStats(S.m, adherence()), last = S.weights[S.weights.length - 1];
-    return '<header class="top"><span class="muted">Since ' + fmt(S.m.joined_on, true) + '</span><h1>Progress</h1></header>' +
-      '<div class="three"><div><span>Start</span><b>' + kg(S.m.start_weight) + '</b></div><div class="now"><span>Now</span><b>' + kg(S.m.current_weight) + '</b></div><div><span>Target</span><b>' + kg(S.m.target_weight) + '</b></div></div>' +
+    const g = goalStats(S.m, adherence()), last = S.weights[S.weights.length - 1], id = X.idealOf(S.m), bmi = X.bmiOf(S.m);
+    return '<header class="top"><span class="muted">Since ' + fmt(S.m.joined_on, true) + (S.m.start_weight != null ? ' · started at ' + kg(S.m.start_weight) : '') + '</span><h1>Progress</h1></header>' +
+      '<div class="three"><div class="now"><span>Current</span><b>' + kg(S.m.current_weight) + '</b></div><div><span>Ideal</span><b>' + (id ? kg(id.w) : '—') + '</b></div><div><span>Target</span><b>' + kg(S.m.target_weight) + '</b></div></div>' +
+      '<p class="muted small center">' + (id ? (id.set ? 'Ideal weight set by your trainer.' : 'Ideal weight from your height.') + (id.range ? ' Healthy range ' + id.range.lo + '–' + id.range.hi + ' kg' + (bmi ? ', your BMI is ' + bmi.toFixed(1) : '') + '.' : '') : 'Add your height below to see your ideal weight.') + '</p>' +
       goalCard() +
       '<h2 class="sec">Log today’s weight</h2><form class="card inline" id="f-weight"><input name="w" type="number" step="0.1" min="20" max="350" inputmode="decimal" placeholder="e.g. ' + (S.m.current_weight || 70) + '" value="' + (last && last.on_date === key(today()) ? last.weight : '') + '" aria-label="Weight in kg" required><span class="muted">kg</span><button class="btn dark">Save</button></form>' +
       '<h2 class="sec">Weight</h2><div class="card">' + X.weightChart(S.weights, num(S.m.target_weight)) + '</div>' +
       '<h2 class="sec">My goal and diet</h2><form class="card form" id="f-goal">' +
-      X.field('Target weight (kg)', 'target', S.m.target_weight || '', 'type="number" step="0.1" min="20" max="350" inputmode="decimal"') +
+      '<div class="two">' + X.field('Target weight (kg)', 'target', S.m.target_weight || '', 'type="number" step="0.1" min="20" max="350" inputmode="decimal"') + X.field('Height (cm)', 'height', S.m.height_cm || '', 'type="number" min="100" max="230" inputmode="numeric"') + '</div>' +
       '<div class="fld"><span>My diet</span><div class="seg2 full"><label><input type="radio" name="diet" value="veg"' + (S.m.diet_type === 'veg' ? ' checked' : '') + '><span>Vegetarian</span></label><label><input type="radio" name="diet" value="nonveg"' + (S.m.diet_type === 'nonveg' ? ' checked' : '') + '><span>Non-veg</span></label></div></div>' +
       X.select('Goal', 'goal', [['lose', 'Lose weight'], ['gain', 'Gain muscle / weight'], ['fit', 'Stay fit']], S.m.goal) +
       '<button class="btn dark">Save my goal</button></form>' +
       (g ? '<p class="muted small" style="margin:12px 4px 0">Estimates use the meals you mark as had. They’re a guide, not medical advice.</p>' : '');
   }
   function vGym() {
-    const g = S.me.gym, c = coach(), p = X.paidState(S.m), cats = [...new Set(S.fac.map((f) => f.category || 'Other'))];
-    return '<header class="top"><span class="muted">' + esc(g.hours || '') + '</span><h1>' + esc(g.name) + '</h1></header>' +
+    const g = S.me.gym, c = coach(), p = X.paidState(S.m), cats = [...new Set(S.fac.map((f) => f.category || 'Other'))], sc = X.schedOf(g), st = X.openState(sc), td = dayIdx(today());
+    return '<header class="top"><span class="muted' + (st && st.open ? ' openn' : '') + '">' + esc(st ? st.text : g.hours || '') + '</span><h1>' + esc(g.name) + '</h1></header>' +
+      (sc ? '<h2 class="sec">Opening hours</h2><div class="group">' + sc.map((s, i) => '<div class="row' + (i === td ? ' tday' : '') + '"><span class="grow' + (i === td ? '' : ' muted') + '">' + WDL[i] + (i === td ? ' · today' : '') + '</span><span class="r">' + X.dayHours(s) + '</span></div>').join('') + '</div>' : '') +
       '<div class="group">' + (g.address ? '<div class="row"><span class="grow muted">Address</span><span class="r">' + esc(g.address) + '</span></div>' : '') + (g.phone ? '<div class="row"><span class="grow muted">Phone</span><span class="r sel">' + esc(g.phone) + '</span></div>' : '') +
       '<div class="row"><span class="grow muted">Membership</span><span class="pill ' + p.cls + '">' + p.label + '</span></div>' + (S.m.plan_name ? '<div class="row"><span class="grow muted">Plan</span><span class="r">' + esc(S.m.plan_name) + (S.m.fee_paise ? ' · ' + inr(S.m.fee_paise) : '') + '</span></div>' : '') + '</div>' +
+      (S.fees.length ? '<h2 class="sec">Fee plans</h2><div class="group">' + S.fees.map((f) => '<div class="row"><div class="grow"><div class="ttl">' + esc(f.name) + (f.id === S.m.fee_plan_id ? ' <span class="pill ok">Your plan</span>' : '') + '</div><div class="sub">' + f.months + ' month' + (f.months > 1 ? 's' : '') + (f.details ? ' · ' + esc(f.details) : '') + '</div></div><span class="r"><b>' + inr(f.fee_paise) + '</b></span></div>').join('') + '</div>' : '') +
       (c ? '<h2 class="sec">My trainer</h2><div class="group"><div class="row"><span class="av">' + X.initials(c.full_name) + '</span><div class="grow"><div class="ttl">' + esc(c.full_name) + '</div><div class="sub">' + esc((c.fq_trainers && c.fq_trainers.speciality) || 'Trainer') + (c.fq_trainers && c.fq_trainers.experience_years ? ' · ' + c.fq_trainers.experience_years + ' yrs' : '') + '</div></div></div>' +
         (c.fq_trainers && c.fq_trainers.slots ? '<div class="row"><span class="grow muted">On the floor</span><span class="r">' + esc(c.fq_trainers.slots) + '</span></div>' : '') + (c.fq_trainers && c.fq_trainers.certifications ? '<div class="row"><span class="grow muted">Certified</span><span class="r">' + esc(c.fq_trainers.certifications) + '</span></div>' : '') + '<div class="row"><span class="grow muted">Phone</span><span class="r sel">' + esc(c.phone) + '</span></div></div>' : '') +
       (S.events.length ? '<h2 class="sec">Events</h2><div class="group">' + S.events.map((e) => '<div class="row"><div class="date"><b>' + parse(e.starts_on).getDate() + '</b><span>' + X.MO[parse(e.starts_on).getMonth()] + '</span></div><div class="grow"><div class="ttl">' + esc(e.title) + '</div><div class="sub">' + (e.starts_at ? e.starts_at.slice(0, 5) + ' · ' : '') + esc(e.details || '') + '</div></div></div>').join('') + '</div>' : '') +
@@ -185,9 +188,12 @@
           if (S.m.start_weight == null) S.m.start_weight = w;
           toast('Weight saved');
         } else if (e.target.id === 'f-goal') {
-          await q(sb.rpc('fq_update_my_goal', { p_diet_type: f.diet, p_target_weight: num(f.target), p_goal: f.goal }));
-          Object.assign(S.m, { diet_type: f.diet, target_weight: num(f.target) ?? S.m.target_weight, goal: f.goal });
-          toast('Goal saved. Your diet now follows the ' + (f.diet === 'veg' ? 'vegetarian' : 'non-veg') + ' plan.');
+          const tw = num(f.target), h = num(f.height);
+          if (tw != null && (tw < 20 || tw > 350)) throw new Error('Target weight looks wrong');
+          if (h != null && (h < 100 || h > 230)) throw new Error('Height should be in cm, between 100 and 230');
+          await q(sb.rpc('fq_update_my_goal', { p_diet_type: f.diet, p_target_weight: tw, p_goal: f.goal, p_height_cm: h }));
+          Object.assign(S.m, { diet_type: f.diet, target_weight: tw ?? S.m.target_weight, goal: f.goal, height_cm: h ?? S.m.height_cm });
+          toast('Saved. Your trainer sees it now.');
         }
         render(true);
       } catch (err) { fail(err); } finally { X.busy(btn, false); }

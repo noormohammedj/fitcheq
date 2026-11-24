@@ -18,6 +18,17 @@ Plain HTML, CSS and JavaScript with sample data. No build step. Hosted on GitHub
 The Inraa Solution website embeds the demo member app from `demo/`, so keep `demo/data.js`, `demo/app.js`,
 `demo/app.css` and `demo/demo.js` at these paths.
 
+## What each role can do (v2, 24 Nov 2026)
+- **Owner (admin):** add, edit (name, mobile, details) and remove trainers; fee plans; opening hours (two sessions a day); facilities; members, payments, reminders; events and messages. Can also do everything a trainer does.
+- **Trainer:** each member's own meals and workout, day by day (14-day strip), with "Copy to other days" and "Fill from template"; attendance (from workouts marked done) with WhatsApp "we missed you" reminders; consistency chart; weights (current, ideal, target, BMI).
+- **Member:** their own meals and workouts; tick had or skip; mark workout done or skipped; current, ideal and target weight; height; gym hours (open now) and fee plans.
+
+## Tests
+- `npm run test:db`: every permission on an in-memory Postgres (67 checks, run twice around a rollback).
+- `tests/preview-e2e.js`: click-through tests for owner, trainer and member in preview mode (see the file header).
+- `node scripts/live-check.mjs`: checks the deployed admin function and the app's data calls on the live project as the trial logins, using an admin-issued sign-in link (no passwords). Cleans up after itself.
+- `node scripts/upgrade-v2.mjs`: one-off data step after the v2 migration (hours, fee plans, member meals). Safe to re-run.
+
 ## Run locally
 ```bash
 python3 -m http.server 8737

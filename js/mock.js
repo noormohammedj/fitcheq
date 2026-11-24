@@ -16,8 +16,10 @@
   let seed = 11; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   let n = 0; const uid = () => '00000000-0000-4000-8000-' + String(++n).padStart(12, '0');
   const G = uid();
-  const db = { fq_gyms: [], fq_profiles: [], fq_trainers: [], fq_members: [], fq_payments: [], fq_notices: [], fq_events: [], fq_facilities: [], fq_workouts: [], fq_workout_assignments: [], fq_diet_plans: [], fq_diet_items: [], fq_diet_logs: [], fq_weight_logs: [] };
-  db.fq_gyms.push({ id: G, name: 'Prozone', address: 'Dindigul, Tamil Nadu', phone: '+91 90000 00001', hours: 'Mon–Sat 5:30 am–10 pm · Sun 6 am–12 pm', about: 'Strength floor, cardio, functional zone and personal training.' });
+  const db = { fq_gyms: [], fq_profiles: [], fq_trainers: [], fq_members: [], fq_payments: [], fq_notices: [], fq_events: [], fq_facilities: [], fq_workouts: [], fq_workout_assignments: [], fq_diet_plans: [], fq_diet_items: [], fq_diet_logs: [], fq_weight_logs: [], fq_fee_plans: [], fq_member_meals: [] };
+  db.fq_gyms.push({ id: G, name: 'Prozone', address: 'Dindigul, Tamil Nadu', phone: '+91 90000 00001', hours: '', schedule: [0, 1, 2, 3, 4, 5, 6].map((i) => (i === 6 ? { closed: false, slots: [['06:00', '12:00']] } : { closed: false, slots: [['05:30', '10:30'], ['16:00', '22:00']] })), about: 'Strength floor, cardio, functional zone and personal training.' });
+  const FEES = [['Monthly', 1, 2800, 'Gym floor and trainer guidance'], ['Quarterly', 3, 7500, 'Save ₹900'], ['Half-yearly', 6, 13500, 'Save ₹3,300'], ['Annual', 12, 24000, 'Save ₹9,600 · 1 diet consult a month']]
+    .map(([name, months, fee, details]) => { const f = { id: uid(), gym_id: G, name, months, fee_paise: fee * 100, details, active: true }; db.fq_fee_plans.push(f); return f; });
   const prof = (role, full_name, phone) => { const p = { id: uid(), gym_id: G, role, full_name, phone, active: true, created_at: new Date().toISOString() }; db.fq_profiles.push(p); return p; };
   const owner = prof('admin', 'Prozone Owner', '9000000001');
   const trs = [['Priya Raman', '9000000011', 'Fat loss and nutrition', 8, 'ACE CPT, Precision Nutrition L1', '6–10 am, 5–8 pm'], ['Karthik Selvam', '9000000012', 'Strength and muscle gain', 6, 'NSCA-CPT', '7–11 am, 6–9 pm']].map((t) => {
@@ -52,7 +54,10 @@
     ['Sameer Khan', '9000000103', 0, 'nonveg', 'lose', 180, 104.8, 99.0, 90, 'Half-yearly', 13500, 95, 0.72], ['Divya Krishnan', '9000000104', 0, 'veg', 'lose', 165, 68.5, 66.2, 62, 'Monthly', 2800, -4, 0.78], ['Rahul Nair', '9000000105', 1, 'veg', 'gain', 172, 64.0, 65.8, 70, 'Monthly', 2800, 12, 0.6]];
   const memberProfiles = mems.map(([name, phone, tr, diet, goal, h, sw, cw, tw, plan, fee, paid, adh]) => {
     const p = prof('member', name, phone), until = add(T, paid);
-    db.fq_members.push({ profile_id: p.id, gym_id: G, trainer_id: trs[tr].id, diet_type: diet, goal, height_cm: h, start_weight: sw, current_weight: cw, target_weight: tw, plan_name: plan, fee_paise: fee * 100, paid_until: key(until), joined_on: key(add(T, -42)) });
+    db.fq_members.push({ profile_id: p.id, gym_id: G, trainer_id: trs[tr].id, diet_type: diet, goal, height_cm: h, start_weight: sw, current_weight: cw, target_weight: tw, plan_name: plan, fee_plan_id: (FEES.find((f) => f.name === plan) || {}).id || null, ideal_weight: null, fee_paise: fee * 100, paid_until: key(until), joined_on: key(add(T, -42)) });
+    // their own meals: last 10 days and the coming week (Rahul's coming week is left empty on purpose)
+    const src = diet === 'veg' ? V : NV;
+    for (let i = -10; i <= (name.startsWith('Rahul') ? 0 : 6); i++) { const d = add(T, i), di = (d.getDay() + 6) % 7; MEALS.forEach((meal) => { const [items, kcal] = src[meal][(di + mems.length) % 7].split('|'); db.fq_member_meals.push({ id: uid(), gym_id: G, member_id: p.id, on_date: key(d), meal, items: goal === 'gain' && meal === 'snack' ? items + ', 1 banana' : items, kcal: +kcal + (goal === 'gain' && meal === 'snack' ? 90 : 0), protein_g: null }); }); }
     db.fq_payments.push({ id: uid(), gym_id: G, member_id: p.id, amount_paise: fee * 100, paid_on: key(add(until, -30)), period_until: key(until), method: 'UPI', note: null, recorded_by: owner.id, created_at: new Date().toISOString() });
     for (let i = 6; i >= 0; i--) { const t = (6 - i) / 6; db.fq_weight_logs.push({ id: uid(), gym_id: G, member_id: p.id, on_date: key(add(T, -i * 7)), weight: Math.round((sw + (cw - sw) * t + (i && i < 6 ? (rnd() - 0.5) * 0.6 : 0)) * 10) / 10 }); }
     for (let i = 10; i >= 1; i--) MEALS.forEach((meal) => db.fq_diet_logs.push({ member_id: p.id, gym_id: G, on_date: key(add(T, -i)), meal, status: rnd() < adh ? 'done' : 'skipped' }));
@@ -77,7 +82,7 @@
     if (table === 'fq_members') return rows.filter((r) => r.profile_id === me.id);
     if (table === 'fq_profiles') return rows.filter((r) => r.role !== 'member' || r.id === me.id);
     if (table === 'fq_notices') return rows.filter((r) => !r.member_id || r.member_id === me.id);
-    if (['fq_payments', 'fq_diet_logs', 'fq_weight_logs', 'fq_workout_assignments'].includes(table)) return rows.filter((r) => r.member_id === me.id);
+    if (['fq_payments', 'fq_diet_logs', 'fq_weight_logs', 'fq_workout_assignments', 'fq_member_meals'].includes(table)) return rows.filter((r) => r.member_id === me.id);
     return rows;
   }
   function embed(table, row, part) {
@@ -138,7 +143,7 @@
     from: (t) => new Q(t),
     rpc: async (name, a) => {
       if (name === 'fq_mark_my_workout') { const w = db.fq_workout_assignments.find((x) => x.id === a.p_id && x.member_id === me.id); if (!w) return { error: { message: 'Workout not found' } }; w.status = a.p_status; return { data: null, error: null }; }
-      if (name === 'fq_update_my_goal') { const m3 = db.fq_members.find((x) => x.profile_id === me.id); Object.assign(m3, { diet_type: a.p_diet_type, target_weight: a.p_target_weight ?? m3.target_weight, goal: a.p_goal || m3.goal }); return { data: null, error: null }; }
+      if (name === 'fq_update_my_goal') { const m3 = db.fq_members.find((x) => x.profile_id === me.id); Object.assign(m3, { diet_type: a.p_diet_type, target_weight: a.p_target_weight ?? m3.target_weight, goal: a.p_goal || m3.goal, height_cm: a.p_height_cm ?? m3.height_cm }); return { data: null, error: null }; }
       return { error: { message: 'Unknown' } };
     },
     functions: { invoke: async (name, { body }) => {
@@ -151,6 +156,18 @@
         return { data: { id: p.id }, error: null };
       }
       if (body.action === 'set_active') { const p = db.fq_profiles.find((x) => x.id === body.user_id); p.active = !!body.active; }
+      if (body.action === 'update_user') {
+        const ph = String(body.phone).replace(/\D/g, '').slice(-10);
+        if (db.fq_profiles.some((x) => x.phone === ph && x.id !== body.user_id)) return { data: { error: 'This mobile number already has a login' }, error: null };
+        Object.assign(db.fq_profiles.find((x) => x.id === body.user_id), { full_name: body.full_name, phone: ph });
+      }
+      if (body.action === 'remove_user') {
+        const id = body.user_id;
+        db.fq_profiles = db.fq_profiles.filter((x) => x.id !== id); db.fq_trainers = db.fq_trainers.filter((x) => x.profile_id !== id);
+        db.fq_members.forEach((x) => { if (x.trainer_id === id) x.trainer_id = null; });
+        db.fq_members = db.fq_members.filter((x) => x.profile_id !== id);
+        ['fq_payments', 'fq_diet_logs', 'fq_weight_logs', 'fq_workout_assignments', 'fq_member_meals', 'fq_notices'].forEach((t) => { db[t] = db[t].filter((x) => x.member_id !== id); });
+      }
       return { data: { ok: true }, error: null };
     } },
     auth: {

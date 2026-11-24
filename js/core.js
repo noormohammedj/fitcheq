@@ -45,6 +45,9 @@
     bell: '<path d="M6 16V11a6 6 0 1112 0v5l2 2H4l2-2zM10 21h4"/>',
     settings: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
     home: '<path d="M3 11l9-7 9 7v9H3z"/>',
+    wa: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>',
   };
   const ic = (n, c) => '<svg class="' + (c || 'ic') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
 
@@ -63,6 +66,66 @@
     const full = gain ? 0.3 : 0.65;
     return { gain, moved, toGo, pct, adherence: a, monthly: weekly * 30 / 7, eta: eta(weekly), etaFull: eta(full), fullMonthly: full * 30 / 7 };
   }
+
+  // ---------- body metrics ----------
+  // ideal weight: the trainer's figure if set, otherwise the middle of the healthy BMI range for Indian adults (18.5–22.9)
+  function idealOf(m) {
+    const h = num(m.height_cm), hm = h ? h / 100 : null;
+    const range = hm ? { lo: Math.round(18.5 * hm * hm), hi: Math.round(22.9 * hm * hm) } : null;
+    if (m.ideal_weight != null) return { w: num(m.ideal_weight), set: true, range };
+    return hm ? { w: Math.round(21.5 * hm * hm * 10) / 10, set: false, range } : null;
+  }
+  const bmiOf = (m) => { const h = num(m.height_cm), w = num(m.current_weight); return h && w ? w / ((h / 100) ** 2) : null; };
+
+  // ---------- opening hours ----------
+  const t12 = (hm) => { let [h, m] = String(hm).split(':').map(Number); const ap = h >= 12 && h < 24 ? 'pm' : 'am'; h = h % 12 || 12; return h + (m ? ':' + pad(m) : '') + ' ' + ap; };
+  const mins = (hm) => { const [h, m] = String(hm).split(':').map(Number); return h * 60 + m; };
+  const schedOf = (g) => (Array.isArray(g && g.schedule) && g.schedule.length === 7 ? g.schedule : null);
+  const dayHours = (s) => (!s || s.closed || !(s.slots || []).length ? 'Closed' : s.slots.map(([a, b]) => t12(a) + '–' + t12(b)).join(', '));
+  function hoursSummary(sc) {
+    if (!sc) return '';
+    const parts = []; let i = 0;
+    while (i < 7) { let j = i; while (j + 1 < 7 && dayHours(sc[j + 1]) === dayHours(sc[i])) j++; parts.push((i === j ? WD[i] : WD[i] + '–' + WD[j]) + ' ' + dayHours(sc[i])); i = j + 1; }
+    return parts.join(' · ');
+  }
+  function openState(sc, now) {
+    if (!sc) return null;
+    now = now || new Date(); const di = dayIdx(now), m = now.getHours() * 60 + now.getMinutes(), s = sc[di];
+    if (!s.closed) for (const [a, b] of s.slots || []) if (m >= mins(a) && m < mins(b)) return { open: true, text: 'Open now · closes ' + t12(b) };
+    for (let k = 0; k < 8; k++) {
+      const d = (di + k) % 7, x = sc[d]; if (x.closed) continue;
+      for (const [a] of x.slots || []) if (k > 0 || mins(a) > m) return { open: false, text: 'Closed now · opens ' + (k === 0 ? 'at ' : k === 1 ? 'tomorrow ' : WDL[d] + ' ') + t12(a) };
+    }
+    return { open: false, text: 'Closed' };
+  }
+
+  // ---------- consistency: workouts done and meals had over the last days ----------
+  function consistency(wa, logs, days) {
+    days = days || 14; const t = today(), tk = key(t), out = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const dk = key(addDays(t, -i)), w = wa.filter((x) => x.on_date === dk), l = logs.filter((x) => x.on_date === dk);
+      out.push({ dk, had: l.filter((x) => x.status === 'done').length, skipped: l.filter((x) => x.status === 'skipped').length, wo: w.length ? (w.some((x) => x.status === 'done') ? 'done' : w.some((x) => x.status === 'skipped') ? 'skipped' : 'assigned') : null });
+    }
+    const planned = out.filter((d) => d.wo && (d.dk < tk || d.wo !== 'assigned'));
+    const done = planned.filter((d) => d.wo === 'done').length, had = out.reduce((s, d) => s + d.had, 0), logged = out.reduce((s, d) => s + d.had + d.skipped, 0);
+    const lastDone = wa.filter((x) => x.status === 'done' && x.on_date <= tk).map((x) => x.on_date).sort().pop() || null;
+    let streak = 0; for (const d of planned.slice().reverse()) { if (d.wo === 'done') streak++; else break; }
+    return { days: out, woDone: done, woPlanned: planned.length, mealPct: logged ? had / logged : null, lastDone, daysSince: lastDone ? Math.round((t - parse(lastDone)) / 864e5) : null, streak };
+  }
+  function consistencyChart(c) {
+    const n = c.days.length, W = 340, H = 120, L = 6, R = 6, T = 8, B = 34, bw = (W - L - R) / n;
+    let s = '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + (H - B) + '" y2="' + (H - B) + '" class="cg"/>';
+    c.days.forEach((d, i) => {
+      const x = L + i * bw, tot = d.had + d.skipped, h = tot ? (d.had / Math.max(tot, 5)) * (H - T - B) : 0;
+      s += tot ? '<rect x="' + (x + 3).toFixed(1) + '" y="' + (H - B - h).toFixed(1) + '" width="' + (bw - 6).toFixed(1) + '" height="' + Math.max(h, 1.5).toFixed(1) + '" class="cb"/>' : '<rect x="' + (x + 3).toFixed(1) + '" y="' + (H - B - 1.5) + '" width="' + (bw - 6).toFixed(1) + '" height="1.5" class="cbe"/>';
+      const cx = (x + bw / 2).toFixed(1), cy = H - B + 12;
+      s += d.wo === 'done' ? '<circle cx="' + cx + '" cy="' + cy + '" r="4" class="cwd"/>' : d.wo === 'skipped' ? '<path d="M' + (cx - 3.5) + ' ' + (cy - 3.5) + 'l7 7M' + (cx - 3.5) + ' ' + (cy + 3.5) + 'l7 -7" class="cws"/>' : d.wo === 'assigned' ? '<circle cx="' + cx + '" cy="' + cy + '" r="3.5" class="cwa"/>' : '';
+      if (i === 0 || i === n - 1 || i === Math.floor(n / 2)) s += '<text x="' + cx + '" y="' + (H - 4) + '" text-anchor="middle" class="ct">' + fmt(d.dk) + '</text>';
+    });
+    return '<svg class="cchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Meals had and workouts, last ' + n + ' days">' + s + '</svg>' +
+      '<div class="legend"><span><i class="lb"></i>Meals had</span><span><i class="lwd"></i>Workout done</span><span><i class="lws">×</i>Skipped</span><span><i class="lwa"></i>Not marked</span></div>';
+  }
+  const waLink = (phone, text) => 'https://wa.me/91' + phone10(phone) + '?text=' + encodeURIComponent(text);
 
   // ---------- UI pieces ----------
   let toastT;
@@ -152,5 +215,6 @@
     });
   }
 
-  window.FQX = { sb, esc, $, $$, key, parse, today, addDays, monday, dayIdx, WD, WDL, MO, fmt, inr, MEALS, phone10, initials, num, kg, ic, goalStats, toast, sheet, closeSheet, fail, busy, q, formData, field, area, select, bar, paidState, weightChart, signIn, loadMe, adminCall, changePasswordSheet, CFG };
+  window.FQX = { sb, esc, $, $$, key, parse, today, addDays, monday, dayIdx, WD, WDL, MO, fmt, inr, MEALS, phone10, initials, num, kg, ic, goalStats,
+    idealOf, bmiOf, t12, schedOf, dayHours, hoursSummary, openState, consistency, consistencyChart, waLink, isTrialPhone, toast, sheet, closeSheet, fail, busy, q, formData, field, area, select, bar, paidState, weightChart, signIn, loadMe, adminCall, changePasswordSheet, CFG };
 })();

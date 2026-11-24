@@ -80,9 +80,9 @@
 
   <h2>What to try this week</h2>
   <div class="try">
-    <div class="owner"><b>As the owner</b><ul><li>Add a real member and a trainer</li><li>Record a payment and send a payment reminder</li><li>Add an event, like a Sunday bootcamp</li><li>Update facilities and your gym profile</li></ul></div>
-    <div class="trainer"><b>As a trainer</b><ul><li>Load next week’s veg and non-veg diet</li><li>Assign a workout to a member for the week</li><li>Mark what a member did today</li><li>Log a member’s weight</li></ul></div>
-    <div class="member"><b>As a member</b><ul><li>Tick or skip today’s meals</li><li>See how close you are to your goal</li><li>Check today’s and the next 7 days’ workouts</li><li>Log your weight; switch veg or non-veg</li></ul></div>
+    <div class="owner"><b>As the owner</b><ul><li>Add, edit or remove a trainer</li><li>Set your fee plans and opening hours</li><li>Add a real member on a fee plan and record their payment</li><li>Update facilities; send a payment reminder</li></ul></div>
+    <div class="trainer"><b>As a trainer</b><ul><li>Open a member and set their meals and workout for a day</li><li>Copy that day to the next 3 days, then change one</li><li>See who hasn’t come and send a WhatsApp reminder</li><li>Check a member’s consistency chart, current, ideal and target weight</li></ul></div>
+    <div class="member"><b>As a member</b><ul><li>See today’s meals and workout set by your trainer</li><li>Tick a meal as had or skipped; mark the workout done or skipped</li><li>See your current, ideal and target weight</li><li>Check gym hours and fee plans</li></ul></div>
   </div>
 
   <h2>Just want a quick look?</h2>
@@ -95,7 +95,7 @@
 <script>
   (function () {
     const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-    const CAN = { owner: 'Members, payments, reminders, trainers, events, facilities', trainer: 'Diet plans, workouts, member progress', member: 'Diet, workouts, progress to goal' };
+    const CAN = { owner: 'Trainers, fee plans, hours, facilities, members, payments', trainer: 'Each member’s daily diet and workouts, consistency, reminders', member: 'My diet and workouts, ticks, current, ideal and target weight' };
     const acc = (window.FQ_CONFIG && FQ_CONFIG.trialAccounts) || [];
     document.getElementById('accs').innerHTML = acc.map((a) => '<div class="acc ' + a.as + '"><span class="role">' + esc(a.label) + '</span><b>' + esc(a.name) + '</b><p class="can">' + CAN[a.as] + '</p><dl><dt>Mobile</dt><dd>' + esc(a.phone) + '</dd><dt>Password</dt><dd>' + esc(a.password) + '</dd></dl><button class="copy" type="button" data-copy="' + esc('Mobile: ' + a.phone + '  Password: ' + a.password) + '">Copy login</button><a class="btn dark" href="../#as=' + a.as + '">Sign in as ' + esc(a.label.toLowerCase()) + '</a></div>').join('');
     document.addEventListener('click', async (e) => {

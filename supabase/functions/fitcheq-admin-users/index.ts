@@ -1,5 +1,5 @@
-// admin-users: lets a gym admin create logins for trainers and members, reset passwords and
-// switch accounts on or off. Only callers whose profile is an active admin may use it, and only
+// admin-users: lets a gym admin create logins for trainers and members, change their name and number,
+// remove them, reset passwords and switch accounts on or off. Only callers whose profile is an active admin may use it, and only
 // inside their own gym. Logins are phone number + password; the phone is mapped to an internal email.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
         goal: ["lose", "gain", "fit"].includes(m.goal) ? m.goal : "lose", start_weight: w, current_weight: w,
         target_weight: m.target_weight ? Number(m.target_weight) : null, height_cm: m.height_cm ? Number(m.height_cm) : null,
         plan_name: m.plan_name ?? null, fee_paise: m.fee_rupees ? Math.round(Number(m.fee_rupees) * 100) : null, paid_until: m.paid_until || null,
+        fee_plan_id: m.fee_plan_id || null, ideal_weight: m.ideal_weight ? Number(m.ideal_weight) : null,
       });
       if (r.error) return undo("Could not save member details");
       if (w) await service.from("fq_weight_logs").insert({ gym_id: me.gym_id, member_id: id, weight: w, recorded_by: who.user.id });
@@ -91,6 +92,35 @@ Deno.serve(async (req) => {
     await service.from("fq_profiles").update({ active }).eq("id", body.user_id);
     await service.auth.admin.updateUserById(body.user_id, { ban_duration: active ? "none" : "876000h" });
     return json({ ok: true });
+  }
+
+  // change a trainer's or member's name and mobile number (the number is also their login)
+  if (body.action === "update_user") {
+    if (!(await sameGym(body.user_id))) return json({ error: "Not found" }, 404);
+    const { data: cur } = await service.from("fq_profiles").select("phone, full_name").eq("id", body.user_id).single();
+    const name = String(body.full_name ?? cur?.full_name ?? "").trim(), phone = phone10(body.phone ?? cur?.phone);
+    if (!name) return json({ error: "Enter a name" }, 400);
+    if (phone.length !== 10) return json({ error: "Enter a 10-digit mobile number" }, 400);
+    if (phone !== cur?.phone) {
+      if (await isTrial(body.user_id)) return json({ error: "Trial logins keep their mobile number" }, 400);
+      const { data: taken } = await service.from("fq_profiles").select("id").eq("phone", phone).maybeSingle();
+      if (taken) return json({ error: "This mobile number already has a login" }, 400);
+      const { error } = await service.auth.admin.updateUserById(body.user_id, { email: `${phone}@${LOGIN_DOMAIN}`, email_confirm: true, user_metadata: { full_name: name, phone } });
+      if (error) return json({ error: "Could not change the mobile number" }, 400);
+    }
+    const { error } = await service.from("fq_profiles").update({ full_name: name, phone }).eq("id", body.user_id);
+    return error ? json({ error: "Could not save" }, 400) : json({ ok: true });
+  }
+
+  // remove a trainer (or member) completely; their clients stay, with no trainer assigned
+  if (body.action === "remove_user") {
+    if (body.user_id === who.user.id) return json({ error: "You cannot remove yourself" }, 400);
+    if (!(await sameGym(body.user_id))) return json({ error: "Not found" }, 404);
+    if (await isTrial(body.user_id)) return json({ error: "Trial logins can’t be removed during the trial" }, 400);
+    const { data: target } = await service.from("fq_profiles").select("role").eq("id", body.user_id).single();
+    if (target?.role === "admin") return json({ error: "The owner login can’t be removed here" }, 400);
+    const { error } = await service.auth.admin.deleteUser(body.user_id);
+    return error ? json({ error: "Could not remove the login" }, 400) : json({ ok: true });
   }
 
   return json({ error: "Unknown action" }, 400);

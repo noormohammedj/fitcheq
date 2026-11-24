@@ -73,6 +73,57 @@ async function checks() {
   ok(!(await as('a', `insert into fq_events(gym_id, title, starts_on) values ($1,'Zumba','2026-12-01')`, [G1])).error, 'admin creates fq_events');
   ok((await as('x', 'select * from fq_events')).rows.length === 0, 'other gym cannot see fq_events');
   ok((await as(null, 'select * from fq_gyms')).error !== undefined || (await as(null, 'select * from fq_gyms')).rows.length === 0, 'signed-out users see nothing');
+
+  // ---------- v2: owner settings ----------
+  const sched = JSON.stringify([{ closed: false, slots: [['05:30', '10:30'], ['16:00', '22:00']] }]);
+  ok(!(await as('a', `update fq_gyms set schedule = $1::jsonb, hours = 'Mon 5:30-10:30' where id = $2`, [sched, G1])).error, 'owner saves opening hours');
+  ok((await as('m', 'select schedule from fq_gyms')).rows[0].schedule[0].slots[1][1] === '22:00', 'member reads opening hours');
+  await as('t', `update fq_gyms set schedule = '[]'::jsonb`);
+  ok((await as('a', 'select schedule from fq_gyms')).rows[0].schedule.length === 1, 'trainer cannot change opening hours');
+  const fp = await as('a', `insert into fq_fee_plans(gym_id, name, months, fee_paise) values ($1, 'Quarterly', 3, 750000) returning id`, [G1]);
+  ok(!fp.error, 'owner adds a fee plan');
+  ok(!!(await as('t', `insert into fq_fee_plans(gym_id, name, months, fee_paise) values ($1, 'Cheap', 1, 100)`, [G1])).error, 'trainer cannot add a fee plan');
+  ok(!!(await as('a', `insert into fq_fee_plans(gym_id, name, months, fee_paise) values ($1, 'Bad', 0, 100)`, [G1])).error, 'fee plan needs at least one month');
+  ok((await as('m', 'select * from fq_fee_plans')).rows.length === 1, 'member sees the gym’s fee plans');
+  ok((await as('x', 'select * from fq_fee_plans')).rows.length === 0, 'other gym cannot see the fee plans');
+  ok(!(await as('a', `update fq_members set fee_plan_id = $1, plan_name = 'Quarterly', fee_paise = 750000 where profile_id = $2`, [fp.rows[0].id, U.m])).error, 'owner puts a member on a fee plan');
+  await as('a', `delete from fq_fee_plans where id = $1`, [fp.rows[0].id]);
+  ok((await as('a', `select fee_plan_id, plan_name from fq_members where profile_id = $1`, [U.m])).rows[0].fee_plan_id === null, 'deleting a plan keeps the member, clears the link');
+  ok(!(await as('a', `update fq_trainers set speciality = 'Yoga' where profile_id = $1`, [U.t])).error, 'owner edits trainer details');
+  ok(!(await as('a', `update fq_profiles set full_name = 'Coach Ravi' where id = $1`, [U.t])).error && (await as('a', `select full_name from fq_profiles where id = $1`, [U.t])).rows[0].full_name === 'Coach Ravi', 'owner renames a trainer');
+  await as('t', `update fq_profiles set full_name = 'Hacked' where id = $1`, [U.a]);
+  ok((await as('a', `select full_name from fq_profiles where id = $1`, [U.a])).rows[0].full_name === 'Owner', 'trainer cannot rename the owner');
+  ok(!!(await as('t', `insert into fq_trainers(profile_id, gym_id) values ($1, $2)`, [U.m2, G1])).error, 'trainer cannot add trainers');
+
+  // ---------- v2: per-member daily meals ----------
+  const meal = await as('t', `insert into fq_member_meals(gym_id, member_id, on_date, meal, items, kcal, protein_g) values ($1,$2,'2026-11-25','breakfast','Ragi dosa x2',340,11) returning id`, [G1, U.m]);
+  ok(!meal.error, 'trainer sets a member’s breakfast for a day');
+  ok(!!(await as('t', `insert into fq_member_meals(gym_id, member_id, on_date, meal, items) values ($1,$2,'2026-11-25','breakfast','Idli')`, [G1, U.m])).error, 'one entry per member, day and meal');
+  ok(!(await as('t', `insert into fq_member_meals(gym_id, member_id, on_date, meal, items) values ($1,$2,'2026-11-25','breakfast','Idli x3') on conflict (member_id, on_date, meal) do update set items = excluded.items`, [G1, U.m])).error, 'trainer changes that meal');
+  ok((await as('m', `select items from fq_member_meals`)).rows[0].items === 'Idli x3', 'member sees the changed meal');
+  ok((await as('m2', `select * from fq_member_meals`)).rows.length === 0, 'another member cannot see it');
+  ok((await as('x', `select * from fq_member_meals`)).rows.length === 0, 'another gym cannot see it');
+  ok(!!(await as('m', `insert into fq_member_meals(gym_id, member_id, on_date, meal, items) values ($1,$2,'2026-11-25','lunch','Pizza')`, [G1, U.m])).error, 'member cannot write their own diet');
+  await as('m', `update fq_member_meals set items = 'Pizza'`);
+  ok((await as('t', `select items from fq_member_meals`)).rows[0].items === 'Idli x3', 'member cannot edit their diet');
+  ok(!!(await as('t', `insert into fq_member_meals(gym_id, member_id, on_date, meal, items) values ($1,$2,'2026-11-25','brunch','x')`, [G1, U.m])).error, 'meal name is checked');
+  ok(!!(await as('t', `insert into fq_member_meals(gym_id, member_id, on_date, meal, items) values ($1,$2,'2026-11-25','lunch','  ')`, [G1, U.m])).error, 'blank meal is refused');
+  ok(!(await as('m', `insert into fq_diet_logs(member_id, gym_id, on_date, meal, status) values ($1,$2,'2026-11-25','breakfast','skipped')`, [U.m, G1])).error, 'member marks that meal skipped');
+
+  // ---------- v2: workouts for the next days, progress, reminders ----------
+  const w3 = await as('t', `insert into fq_workout_assignments(gym_id, member_id, on_date, title) select $1, $2, current_date + i, 'Push' from generate_series(1, 3) i returning id`, [G1, U.m]);
+  ok(!w3.error && w3.rows.length === 3, 'trainer plans workouts for the next 3 days');
+  ok(!(await as('t', `update fq_workout_assignments set title = 'Pull', exercises = '[{"name":"Row","sets":"4 x 10"}]' where id = $1`, [w3.rows[0].id])).error, 'trainer changes a planned workout');
+  ok(!(await as('m', `select fq_mark_my_workout($1, 'skipped')`, [w3.rows[1].id])).error, 'member marks a workout skipped');
+  ok(!(await as('t', `update fq_members set ideal_weight = 72.5, target_weight = 76 where profile_id = $1`, [U.m])).error, 'trainer sets ideal and target weight');
+  const mrow = (await as('m', 'select current_weight, ideal_weight, target_weight from fq_members')).rows[0];
+  ok(Number(mrow.ideal_weight) === 72.5 && Number(mrow.target_weight) === 76 && Number(mrow.current_weight) === 88.4, 'member sees current, ideal and target weight');
+  ok(!!(await as('t', `update fq_members set ideal_weight = 5 where profile_id = $1`, [U.m])).error, 'ideal weight must be realistic');
+  ok(!(await as('m', `select fq_update_my_goal('veg', 75, 'lose', 175)`)).error && (await as('m', 'select height_cm from fq_members')).rows[0].height_cm === 175, 'member sets their height');
+  ok(!!(await as('m', `select fq_update_my_goal('veg', 75, 'lose', 40)`)).error, 'height must be realistic');
+  ok(!(await as('t', `insert into fq_notices(gym_id, member_id, kind, title) values ($1,$2,'attendance','We missed you')`, [G1, U.m])).error, 'trainer records a missed-you reminder');
+  ok((await as('m2', `select * from fq_notices where kind = 'attendance'`)).rows.length === 0, 'missed-you reminder is private');
+  ok((await as('t', `select * from fq_weight_logs`)).rows.length >= 1 && (await as('t', `select * from fq_diet_logs`)).rows.length >= 1, 'trainer reads members’ weight and meal history');
 }
 
 await checks();
