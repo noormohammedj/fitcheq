@@ -47,8 +47,8 @@
   const myList = (P) => (isAdmin || cache.filter === 'all' ? P.members : P.members.filter((m) => m.trainer_id === ME.user.id));
 
   // ---------- layout ----------
-  const NAV_T = [['today', 'Today', 'home'], ['members', 'Members', 'users'], ['templates', 'Diet templates', 'diet'], ['workouts', 'Workouts', 'workout']];
-  const NAV_A = [['overview', 'Overview', 'home'], ['members', 'Members', 'users'], ['trainers', 'Trainers', 'star'], ['fees', 'Fee plans', 'bill'], ['gymprofile', 'Gym and hours', 'clock'], ['facilities', 'Facilities', 'gym'],
+  const NAV_T = [['today', 'Today', 'home'], ['members', 'Members', 'users'], ['cperf', 'Client performance', 'progress'], ['templates', 'Diet templates', 'diet'], ['workouts', 'Workouts', 'workout']];
+  const NAV_A = [['overview', 'Business', 'home'], ['members', 'Members', 'users'], ['cperf', 'Client performance', 'progress'], ['tperf', 'Trainer performance', 'chart'], ['trainers', 'Trainers', 'star'], ['fees', 'Fee plans', 'bill'], ['gymprofile', 'Gym and hours', 'clock'], ['facilities', 'Facilities', 'gym'],
     ['templates', 'Diet templates', 'diet'], ['workouts', 'Workouts', 'workout'], ['events', 'Events', 'calendar'], ['messages', 'Messages', 'bell']];
   function shell(inner) {
     const nav = isAdmin ? NAV_A : NAV_T;
@@ -75,7 +75,7 @@
     if (!rows.length) return '<div class="empty">No members yet.</div>';
     return rows.map(({ m, c, s }) => {
       const r = remindedOn(m.profile_id);
-      return '<div class="li"><div class="grow"><b class="click" data-member="' + m.profile_id + '">' + esc(m.p.full_name) + '</b><small>' + c.woDone + ' of ' + c.woPlanned + ' workouts · ' + (c.mealPct == null ? 'no meals ticked' : Math.round(c.mealPct * 100) + '% meals had') + ' · 14 days' + (isAdmin ? ' · ' + esc(trainerName(m.trainer_id)) : '') + (r ? ' · reminded ' + fmt(r.slice(0, 10)) : '') + '</small></div>' +
+      return '<div class="li"><div class="grow"><b class="click" data-member="' + m.profile_id + '">' + esc(m.p.full_name) + '</b><small>' + c.woDone + ' of ' + c.woPlanned + ' workouts · ' + (c.mealPct == null ? 'no meals ticked' : Math.round(c.mealPct * 100) + '% meals had') + ' · 14 days' + (isAdmin ? ' · ' + esc(trainerName(m.trainer_id)) : '') + (r ? ' · reminded ' + fmt(key(new Date(r))) : '') + '</small></div>' +
         '<span class="pill ' + s.cls + '">' + s.label + '</span>' + (s.rank >= 2 ? '<button class="btn sm" data-missed="' + m.profile_id + '">' + ic('wa') + 'Remind</button>' : '<span class="btnspace"></span>') + '</div>';
     }).join('');
   }
@@ -93,37 +93,145 @@
     });
   }
 
+  // ---------- performance: how each member is doing, how each trainer follows up ----------
+  // one load covers both: workouts, meal ticks, weigh-ins, reminders and plans for the window and the next 3 days
+  async function loadPerf(days) {
+    const t = today(), from = key(addDays(t, -(days - 1))), tk = key(t), to3 = key(addDays(t, 3));
+    const [wa, logs, weights, notes, meals, nextWa] = await Promise.all([
+      q(sb.from('fq_workout_assignments').select('member_id, on_date, status, assigned_by, created_at').gte('on_date', from).lte('on_date', tk)),
+      q(sb.from('fq_diet_logs').select('member_id, on_date, status').gte('on_date', from).lte('on_date', tk)),
+      q(sb.from('fq_weight_logs').select('member_id, on_date, weight').gte('on_date', key(addDays(t, -(days + 30)))).order('on_date')),
+      q(sb.from('fq_notices').select('member_id, created_by, created_at').eq('kind', 'attendance').gte('created_at', addDays(t, -(days - 1)).toISOString())),
+      q(sb.from('fq_member_meals').select('member_id, on_date, updated_by, updated_at').gte('on_date', from).lte('on_date', to3)),
+      q(sb.from('fq_workout_assignments').select('member_id, on_date, assigned_by, created_at').gte('on_date', key(addDays(t, 1))).lte('on_date', to3)),
+    ]);
+    return { days, from, wa, logs, weights, notes, meals, nextWa };
+  }
+  const pctTxt = (v) => (v == null ? '—' : Math.round(v * 100) + '%');
+  const mean = (a) => { const v = a.filter((x) => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+  function clientStats(m, D) {
+    const id = m.profile_id, t = today();
+    const c = X.consistency(D.wa.filter((x) => x.member_id === id), D.logs.filter((x) => x.member_id === id), D.days);
+    const att = c.woPlanned ? c.woDone / c.woPlanned : null;
+    const ws = D.weights.filter((x) => x.member_id === id), inWin = ws.filter((w) => w.on_date >= D.from);
+    const before = ws.filter((w) => w.on_date < D.from).pop();
+    const base = before || inWin[0], last = ws[ws.length - 1];
+    const change = base && last && base !== last ? Number(last.weight) - Number(base.weight) : null;
+    const g = X.goalStats(m, c.mealPct), gain = g ? g.gain : m.goal === 'gain';
+    const rightWay = change == null ? null : gain ? change > 0 : change < 0;
+    const next3 = [1, 2, 3].filter((i) => D.meals.some((x) => x.member_id === id && x.on_date === key(addDays(t, i)))).length;
+    let st;
+    if (c.lastDone == null && !c.woPlanned) st = { k: 3, cls: '', label: 'Getting started' };
+    else if (c.daysSince == null || c.daysSince >= 5 || (att != null && att < 0.4)) st = { k: 0, cls: 'no', label: 'At risk' };
+    else if ((att == null || att >= 0.7) && (c.mealPct == null || c.mealPct >= 0.7) && c.daysSince <= 2) st = { k: 2, cls: 'ok', label: 'On track' };
+    else st = { k: 1, cls: 'wa', label: 'Needs attention' };
+    return { c, att, change, rightWay, g, next3, st };
+  }
+  function trainerStats(tid, members, D) {
+    const t = today(), mine = members.filter((m) => m.trainer_id === tid && m.p.active).map((m) => ({ m, s: clientStats(m, D) }));
+    const away = mine.filter((x) => x.s.c.daysSince == null || x.s.c.daysSince >= 3);
+    const reminded = (id) => D.notes.some((n) => n.member_id === id && new Date(n.created_at) >= addDays(t, -3));
+    const followed = away.filter((x) => reminded(x.m.profile_id)).length;
+    const planCov = mine.length ? mine.filter((x) => x.s.next3 === 3).length / mine.length : null;
+    const avgAtt = mean(mine.map((x) => x.s.att)), avgMeals = mean(mine.map((x) => x.s.c.mealPct)), avgGoal = mean(mine.map((x) => (x.s.g ? x.s.g.pct / 100 : null)));
+    const follow = away.length ? followed / away.length : null;
+    const stamps = D.meals.filter((x) => x.updated_by === tid).map((x) => x.updated_at).concat(D.wa.concat(D.nextWa).filter((x) => x.assigned_by === tid).map((x) => x.created_at)).filter(Boolean).sort();
+    const score = mine.length ? Math.round(100 * (0.35 * (planCov || 0) + 0.25 * (follow == null ? 1 : follow) + 0.25 * (avgAtt || 0) + 0.15 * (avgMeals || 0))) : null;
+    return { mine, away: away.length, followed, follow, planCov, avgAtt, avgMeals, avgGoal, reminders: D.notes.filter((n) => n.created_by === tid).length, lastPlan: stamps.pop() || null,
+      onTrack: mine.filter((x) => x.s.st.k === 2).length, atRisk: mine.filter((x) => x.s.st.k === 0).length, score };
+  }
+  const scoreBar = (v) => (v == null ? '<span class="muted">—</span>' : '<div class="sbar"><b>' + v + '</b>' + X.bar(v, v >= 70 ? 'green' : v >= 45 ? 'amber' : 'red') + '</div>');
+  const winToggle = (days) => '<div class="seg2">' + [[7, '7 days'], [14, '14 days'], [30, '30 days']].map(([d, l]) => '<button class="' + (d === days ? 'on' : '') + '" data-win="' + d + '">' + l + '</button>').join('') + '</div>';
+  const ago = (iso) => { if (!iso) return 'never'; const d = Math.round((today() - parse(key(new Date(iso)))) / 864e5); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago'; };
+  const SCORE_HELP = 'Follow-up score: plans set for the next 3 days (35%), away clients reminded within 3 days (25%), client workouts done (25%), client meals had (15%).';
+
+  // owner: trainer leaderboard
+  async function vTrainerPerf() {
+    const days = cache.win || 14, P = await loadPeople(true), D = await loadPerf(days);
+    const rows = P.trainers.filter((x) => x.p.role === 'trainer').map((x) => ({ x, s: trainerStats(x.p.id, P.members, D) })).sort((a, b) => (b.s.score ?? -1) - (a.s.score ?? -1));
+    const unassigned = P.members.filter((m) => m.p.active && !m.trainer_id).length;
+    return head('Trainer performance', 'Who is doing well and who follows up with their clients. Last ' + days + ' days.', winToggle(days)) +
+      (unassigned ? '<div class="banner wa">' + ic('users') + '<span><b>' + unassigned + ' member' + (unassigned > 1 ? 's have' : ' has') + ' no trainer.</b> Assign them from Members → Edit.</span></div>' : '') +
+      '<div class="cards wide">' + (rows.length ? rows.map(({ x, s }, i) => '<div class="tcard perf"><div class="row0"><span class="av">' + (i + 1) + '</span><div class="grow"><b>' + esc(x.p.full_name) + '</b><small>' + s.mine.length + ' active client' + (s.mine.length === 1 ? '' : 's') + ' · last planned ' + ago(s.lastPlan) + '</small></div></div>' +
+        scoreBar(s.score) + '<dl>' +
+        '<dt>Plans ready, next 3 days</dt><dd>' + pctTxt(s.planCov) + '</dd>' +
+        '<dt>Away clients reminded</dt><dd>' + (s.away ? s.followed + ' of ' + s.away : 'none away') + '</dd>' +
+        '<dt>Reminders sent</dt><dd>' + s.reminders + '</dd>' +
+        '<dt>Client workouts done</dt><dd>' + pctTxt(s.avgAtt) + '</dd>' +
+        '<dt>Client meals had</dt><dd>' + pctTxt(s.avgMeals) + '</dd>' +
+        '<dt>Average progress to target</dt><dd>' + pctTxt(s.avgGoal) + '</dd>' +
+        '<dt>On track · at risk</dt><dd><span class="pill ok">' + s.onTrack + '</span> <span class="pill no">' + s.atRisk + '</span></dd></dl>' +
+        '<div class="btns"><button class="btn sm" data-ctrainer="' + x.p.id + '">See their clients</button></div></div>').join('') : '<div class="empty">No trainers yet.</div>') + '</div>' +
+      '<p class="muted small">' + SCORE_HELP + '</p>';
+  }
+
+  // owner and trainer: every client's performance
+  async function vClientPerf() {
+    const days = cache.win || 14, P = await loadPeople(true), D = await loadPerf(days);
+    const tf = isAdmin ? (cache.ctrainer || '') : (cache.filter === 'all' ? '' : ME.user.id);
+    const list = P.members.filter((m) => m.p.active && (!tf || m.trainer_id === tf)).map((m) => ({ m, s: clientStats(m, D) })).sort((a, b) => a.s.st.k - b.s.st.k || (b.s.c.daysSince ?? 99) - (a.s.c.daysSince ?? 99));
+    const n = (k) => list.filter((x) => x.s.st.k === k).length;
+    const tOpts = [['', 'All trainers']].concat(P.trainers.filter((x) => x.p.role === 'trainer').map((x) => [x.p.id, x.p.full_name]));
+    const filter = isAdmin ? '<label class="fld inl"><select id="ctrainer">' + tOpts.map((o) => '<option value="' + o[0] + '"' + (o[0] === tf ? ' selected' : '') + '>' + esc(o[1]) + '</option>').join('') + '</select></label>' : '<button class="btn" data-act="toggle-mine">' + (cache.filter === 'all' ? 'Show my clients' : 'Show all members') + '</button>';
+    return head('Client performance', (tf && isAdmin ? esc(trainerName(tf)) + '’s clients' : isAdmin || cache.filter === 'all' ? 'All members' : 'Your clients') + ' · last ' + days + ' days', filter + winToggle(days)) +
+      '<div class="kpis"><div><span>On track</span><b class="okc">' + n(2) + '</b></div><div><span>Needs attention</span><b class="wac">' + n(1) + '</b></div><div><span>At risk</span><b class="noc">' + n(0) + '</b></div><div><span>Workouts done · meals had</span><b>' + pctTxt(mean(list.map((x) => x.s.att))) + ' · ' + pctTxt(mean(list.map((x) => x.s.c.mealPct))) + '</b></div></div>' +
+      '<div class="table cards-sm"><table><thead><tr><th>Member</th><th>Status</th><th>Workouts done</th><th>Meals had</th><th>Last came</th><th>Weight, ' + days + ' days</th><th>To target</th><th>Next 3 days</th><th></th></tr></thead><tbody>' +
+      (list.length ? list.map(({ m, s }) => '<tr class="click" data-member="' + m.profile_id + '"><td><b>' + esc(m.p.full_name) + '</b><small>' + esc(trainerName(m.trainer_id)) + ' · ' + ({ lose: 'Lose weight', gain: 'Gain', fit: 'Stay fit' })[m.goal] + '</small></td>' +
+        '<td data-l="Status"><span class="pill ' + s.st.cls + '">' + s.st.label + '</span></td>' +
+        '<td data-l="Workouts">' + s.c.woDone + '/' + s.c.woPlanned + (s.att != null ? ' · ' + pctTxt(s.att) : '') + '</td>' +
+        '<td data-l="Meals">' + pctTxt(s.c.mealPct) + '</td>' +
+        '<td data-l="Last came">' + (s.c.lastDone == null ? '—' : s.c.daysSince === 0 ? 'Today' : s.c.daysSince + 'd ago') + (s.c.streak > 1 ? ' · ' + s.c.streak + ' in a row' : '') + '</td>' +
+        '<td data-l="Weight">' + (s.change == null ? '—' : '<span class="' + (s.rightWay ? 'okc' : 'noc') + '">' + (s.change > 0 ? '+' : '') + s.change.toFixed(1) + ' kg</span>') + '</td>' +
+        '<td data-l="To target">' + (s.g ? Math.round(s.g.pct) + '% · ' + s.g.toGo.toFixed(1) + ' kg to go' : '—') + '</td>' +
+        '<td data-l="Next 3 days">' + (s.next3 === 3 ? '<span class="pill ok">Planned</span>' : '<span class="pill wa">' + s.next3 + ' of 3</span>') + '</td><td class="r go">' + ic('chev', 'ic sm') + '</td></tr>').join('') : '<tr><td colspan="9" class="empty">No members.</td></tr>') + '</tbody></table></div>' +
+      '<p class="muted small">On track: 70%+ of workouts and meals and seen in the last 2 days. At risk: away 5+ days or under 40% of workouts.</p>';
+  }
+
   // ---------- trainer: today ----------
   async function vToday() {
     const P = await loadPeople(true); await loadActivity();
+    const D = await loadPerf(14), me = trainerStats(ME.user.id, P.members, D);
     const list = myList(P).filter((m) => m.p.active), t = today();
-    const from = key(addDays(t, 1)), to = key(addDays(t, 3)), ids = list.map((m) => m.profile_id);
-    const [meals, wa] = ids.length ? await Promise.all([
-      q(sb.from('fq_member_meals').select('member_id, on_date').in('member_id', ids).gte('on_date', from).lte('on_date', to)),
-      q(sb.from('fq_workout_assignments').select('member_id, on_date').in('member_id', ids).gte('on_date', from).lte('on_date', to)),
-    ]) : [[], []];
-    const gaps = list.map((m) => ({ m, days: [1, 2, 3].map((i) => key(addDays(t, i))).filter((d) => !meals.some((x) => x.member_id === m.profile_id && x.on_date === d)) })).filter((g) => g.days.length);
+    const gaps = list.map((m) => ({ m, days: [1, 2, 3].map((i) => key(addDays(t, i))).filter((d) => !D.meals.some((x) => x.member_id === m.profile_id && x.on_date === d)) })).filter((g) => g.days.length);
     const cs = list.map((m) => actOf(m.profile_id)), came = cs.filter((c) => c.daysSince === 0).length, away = cs.filter((c) => c.daysSince == null || c.daysSince >= 3).length;
-    const had = cs.filter((c) => c.mealPct != null), avg = had.length ? Math.round((had.reduce((s, c) => s + c.mealPct, 0) / had.length) * 100) : null;
     return head('Today', fmt(t, true) + ' · ' + (isAdmin || cache.filter === 'all' ? 'all members' : 'your ' + list.length + ' clients'), '<button class="btn" data-act="toggle-mine">' + (cache.filter === 'all' ? 'Show my clients' : 'Show all members') + '</button>') +
-      '<div class="kpis"><div><span>Clients</span><b>' + list.length + '</b></div><div><span>Came today</span><b>' + came + '</b></div><div><span>Away 3+ days</span><b>' + away + '</b></div><div><span>Meals had, 14 days</span><b>' + (avg == null ? '—' : avg + '%') + '</b></div></div>' +
+      '<div class="kpis"><div><span>Clients</span><b>' + list.length + '</b></div><div><span>Came today</span><b>' + came + '</b></div><div><span>Away 3+ days</span><b>' + away + '</b></div><div><span>Plans ready, next 3 days</span><b>' + pctTxt(me.planCov) + '</b></div></div>' +
+      (isAdmin ? '' : '<section class="panel pad myperf"><div class="mp-score"><span class="muted small">Your follow-up score, 14 days</span>' + scoreBar(me.score) + '</div><div class="stat4"><div><b>' + (me.away ? me.followed + '/' + me.away : '—') + '</b><span>away clients reminded</span></div><div><b>' + pctTxt(me.avgAtt) + '</b><span>client workouts done</span></div><div><b>' + pctTxt(me.avgMeals) + '</b><span>client meals had</span></div><div><b>' + me.onTrack + ' · ' + me.atRisk + '</b><span>on track · at risk</span></div></div><p class="muted small">' + SCORE_HELP + ' <button class="link" data-view="cperf">See each client</button></p></section>') +
       '<div class="cols2"><section class="panel"><header><h3>Attendance</h3><span>From workouts marked done</span></header>' + attendanceRows(list) + '</section>' +
       '<section class="panel"><header><h3>Plans missing</h3><span>Meals not set for the next 3 days</span></header>' + (gaps.length ? gaps.map((g) => '<div class="li"><div class="grow"><b>' + esc(g.m.p.full_name) + '</b><small>No meals for ' + g.days.map((d) => WD[dayIdx(parse(d))] + ' ' + parse(d).getDate()).join(', ') + '</small></div><button class="btn sm" data-plan="' + g.m.profile_id + '|' + g.days[0] + '">Plan</button></div>').join('') : '<div class="empty">Every client has meals for the next 3 days.</div>') + '</section></div>';
   }
 
-  // ---------- owner: overview ----------
+  // ---------- owner: business overview ----------
   async function vOverview() {
-    const P = await loadPeople(true); await loadActivity();
-    const events = await q(sb.from('fq_events').select('*').gte('starts_on', key(today())).order('starts_on').limit(5));
-    const unpaid = P.members.filter((m) => m.p.active && X.paidState(m).cls !== 'ok'), due = unpaid.reduce((s, m) => s + (m.fee_paise || 0), 0);
-    const cs = P.members.filter((m) => m.p.active).map((m) => actOf(m.profile_id));
-    return head('Overview', fmt(today(), true) + ' · ' + esc(ME.gym.name), '<button class="btn dark" data-act="add-member">' + ic('plus') + 'Add member</button>') +
-      '<div class="kpis"><div><span>Active members</span><b>' + P.members.filter((m) => m.p.active).length + '</b></div><div><span>Trainers</span><b>' + P.trainers.filter((x) => x.p.role === 'trainer').length + '</b></div>' +
-      '<div><span>Came today</span><b>' + cs.filter((c) => c.daysSince === 0).length + '</b></div><div><span>Fees to collect</span><b>' + inr(due) + '</b></div></div>' +
-      '<div class="cols2"><section class="panel"><header><h3>Attendance</h3><span>From workouts marked done</span></header>' + attendanceRows(P.members) + '</section>' +
-      '<section class="panel"><header><h3>Payments to collect</h3><span>' + unpaid.length + ' members · ' + inr(due) + '</span></header>' +
-      (unpaid.length ? unpaid.map((m) => { const p = X.paidState(m); return '<div class="li"><div class="grow"><b class="click" data-member="' + m.profile_id + '">' + esc(m.p.full_name) + '</b><small>' + esc(m.plan_name || 'Membership') + (m.fee_paise ? ' · ' + inr(m.fee_paise) : '') + '</small></div><span class="pill ' + p.cls + '">' + p.label + '</span><button class="btn sm" data-remind="' + m.profile_id + '">Remind</button></div>'; }).join('') : '<div class="empty">Everyone has paid.</div>') +
-      '<header><h3>Coming events</h3><button class="btn sm" data-view="events">Manage</button></header>' + (events.length ? events.map((e) => '<div class="li"><div class="grow"><b>' + esc(e.title) + '</b><small>' + fmt(e.starts_on, true) + (e.starts_at ? ' · ' + e.starts_at.slice(0, 5) : '') + '</small></div></div>').join('') : '<div class="empty">No events planned.</div>') + '</section></div>';
+    const P = await loadPeople(true), t = today(), m0 = new Date(t.getFullYear(), t.getMonth(), 1), from6 = new Date(t.getFullYear(), t.getMonth() - 5, 1);
+    const [pays, events, D] = await Promise.all([
+      q(sb.from('fq_payments').select('amount_paise, paid_on').gte('paid_on', key(from6))),
+      q(sb.from('fq_events').select('*').gte('starts_on', key(t)).order('starts_on').limit(3)),
+      loadPerf(14),
+    ]);
+    await loadActivity();
+    const active = P.members.filter((m) => m.p.active);
+    const months = Array.from({ length: 6 }, (_, i) => new Date(t.getFullYear(), t.getMonth() - 5 + i, 1));
+    const rev = months.map((d) => pays.filter((p) => p.paid_on.slice(0, 7) === key(d).slice(0, 7)).reduce((s, p) => s + p.amount_paise, 0));
+    const thisM = rev[5], lastM = rev[4], change = lastM ? (thisM - lastM) / lastM : null;
+    const overdue = active.filter((m) => { const p = X.paidState(m); return p.cls === 'no'; }), overdueAmt = overdue.reduce((s, m) => s + (m.fee_paise || 0), 0);
+    const renew = active.filter((m) => { const p = X.paidState(m); return p.cls === 'wa'; }), renewAmt = renew.reduce((s, m) => s + (m.fee_paise || 0), 0);
+    const newM = active.filter((m) => m.joined_on >= key(m0)).length;
+    const stats = active.map((m) => ({ m, s: clientStats(m, D) })), risk = stats.filter((x) => x.s.st.k === 0);
+    const board = P.trainers.filter((x) => x.p.role === 'trainer').map((x) => ({ x, s: trainerStats(x.p.id, P.members, D) })).sort((a, b) => (b.s.score ?? -1) - (a.s.score ?? -1));
+    const max = Math.max(...rev, 1), W = 340, H = 140, bw = (W - 20) / 6;
+    const chart = '<svg class="rchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Fees collected by month">' + rev.map((v, i) => { const h = (v / max) * (H - 44), x = 10 + i * bw; return '<rect x="' + (x + 8) + '" y="' + (H - 22 - h) + '" width="' + (bw - 16) + '" height="' + Math.max(h, 1.5) + '" class="' + (i === 5 ? 'cur' : '') + '"/><text x="' + (x + bw / 2) + '" y="' + (H - 6) + '" text-anchor="middle" class="ct">' + X.MO[months[i].getMonth()] + '</text>' + (v ? '<text x="' + (x + bw / 2) + '" y="' + (H - 27 - h) + '" text-anchor="middle" class="cv">' + (v >= 1e7 ? (v / 1e7).toFixed(1) + 'L' : Math.round(v / 1e5) + 'k') + '</text>' : ''); }).join('') + '</svg>';
+    return head('Business', fmt(t, true) + ' · ' + esc(ME.gym.name), '<button class="btn dark" data-act="add-member">' + ic('plus') + 'Add member</button>') +
+      '<div class="kpis"><div><span>Fees collected, ' + X.MO[t.getMonth()] + '</span><b>' + inr(thisM) + '</b><small>' + (change == null ? 'first month' : (change >= 0 ? '+' : '') + Math.round(change * 100) + '% vs ' + X.MO[months[4].getMonth()]) + '</small></div>' +
+      '<div><span>Overdue</span><b class="' + (overdue.length ? 'noc' : '') + '">' + inr(overdueAmt) + '</b><small>' + overdue.length + ' member' + (overdue.length === 1 ? '' : 's') + '</small></div>' +
+      '<div><span>Renewals, next 7 days</span><b>' + inr(renewAmt) + '</b><small>' + renew.length + ' member' + (renew.length === 1 ? '' : 's') + '</small></div>' +
+      '<div><span>Active members</span><b>' + active.length + '</b><small>' + newM + ' new this month · ' + risk.length + ' at risk</small></div></div>' +
+      '<div class="cols2"><section class="panel"><header><h3>Fees collected</h3><span>Last 6 months</span></header><div class="pad">' + chart + '</div></section>' +
+      '<section class="panel"><header><h3>Trainers</h3><button class="btn sm" data-view="tperf">Details</button></header>' + (board.length ? board.map(({ x, s }) => '<div class="li"><div class="grow"><b>' + esc(x.p.full_name) + '</b><small>' + s.mine.length + ' clients · ' + pctTxt(s.avgAtt) + ' workouts done · ' + (s.away ? s.followed + ' of ' + s.away + ' away reminded' : 'none away') + '</small></div>' + scoreBar(s.score) + '</div>').join('') : '<div class="empty">No trainers yet.</div>') + '</section></div>' +
+      '<div class="cols2"><section class="panel"><header><h3>Members at risk</h3><button class="btn sm" data-view="cperf">All clients</button></header>' + (risk.length ? risk.map(({ m, s }) => '<div class="li"><div class="grow"><b class="click" data-member="' + m.profile_id + '">' + esc(m.p.full_name) + '</b><small>' + (s.c.lastDone ? 'Last came ' + (s.c.daysSince) + ' days ago' : 'No workout marked yet') + ' · ' + esc(trainerName(m.trainer_id)) + '</small></div><button class="btn sm" data-missed="' + m.profile_id + '">' + ic('wa') + 'Remind</button></div>').join('') : '<div class="empty">No one is at risk.</div>') + '</section>' +
+      '<section class="panel"><header><h3>Payments to collect</h3><span>' + (overdue.length + renew.length) + ' members</span></header>' +
+      (overdue.concat(renew).length ? overdue.concat(renew).map((m) => { const p = X.paidState(m); return '<div class="li"><div class="grow"><b class="click" data-member="' + m.profile_id + '">' + esc(m.p.full_name) + '</b><small>' + esc(m.plan_name || 'Membership') + (m.fee_paise ? ' · ' + inr(m.fee_paise) : '') + '</small></div><span class="pill ' + p.cls + '">' + p.label + '</span><button class="btn sm" data-remind="' + m.profile_id + '">Remind</button></div>'; }).join('') : '<div class="empty">Everyone has paid.</div>') +
+      (events.length ? '<header><h3>Coming events</h3><button class="btn sm" data-view="events">Manage</button></header>' + events.map((e) => '<div class="li"><div class="grow"><b>' + esc(e.title) + '</b><small>' + fmt(e.starts_on, true) + (e.starts_at ? ' · ' + e.starts_at.slice(0, 5) : '') + '</small></div></div>').join('') : '') + '</section></div>';
   }
 
   // ---------- members ----------
@@ -437,7 +545,7 @@
     const [ns, P] = await Promise.all([q(sb.from('fq_notices').select('*').order('created_at', { ascending: false }).limit(50)), loadPeople()]);
     const K = { payment: ['Payment', 'wa'], event: ['Event', 'ac'], general: ['Message', ''], attendance: ['Missed you', 'no'] };
     return head('Messages', 'Messages appear in members’ apps. Reminders go only to that member.', '<button class="btn dark" data-act="add-notice">' + ic('plus') + 'New message</button>') +
-      '<div class="panel">' + (ns.length ? ns.map((n) => '<div class="li"><span class="pill ' + K[n.kind][1] + '">' + K[n.kind][0] + '</span><div class="grow"><b>' + esc(n.title) + '</b><small>' + (n.member_id ? 'To ' + esc((P.byId[n.member_id] || {}).full_name || 'member') : 'To everyone') + ' · ' + fmt(n.created_at.slice(0, 10)) + (n.body ? ' · ' + esc(n.body) : '') + '</small></div><button class="iconbtn" data-delnotice="' + n.id + '" aria-label="Delete">' + ic('x') + '</button></div>').join('') : '<div class="empty">No messages sent yet.</div>') + '</div>';
+      '<div class="panel">' + (ns.length ? ns.map((n) => '<div class="li"><span class="pill ' + K[n.kind][1] + '">' + K[n.kind][0] + '</span><div class="grow"><b>' + esc(n.title) + '</b><small>' + (n.member_id ? 'To ' + esc((P.byId[n.member_id] || {}).full_name || 'member') : 'To everyone') + ' · ' + fmt(key(new Date(n.created_at))) + (n.body ? ' · ' + esc(n.body) : '') + '</small></div><button class="iconbtn" data-delnotice="' + n.id + '" aria-label="Delete">' + ic('x') + '</button></div>').join('') : '<div class="empty">No messages sent yet.</div>') + '</div>';
   }
   async function noticeSheet() {
     const P = await loadPeople();
@@ -530,9 +638,10 @@
       '<div class="two">' + select('Goal', 'goal', [['lose', 'Lose weight'], ['gain', 'Gain muscle / weight'], ['fit', 'Stay fit']], m.goal || 'lose') + field('Height (cm)', 'height', m.height_cm, 'type="number" min="100" max="230"') + '</div>' +
       '<div class="two">' + field('Starting weight (kg)', 'start', m.start_weight, 'type="number" step="0.1" min="20" max="350"') + field('Target weight (kg)', 'target', m.target_weight, 'type="number" step="0.1" min="20" max="350"') + '</div>' +
       '<div class="two">' + select('Fee plan', 'feeplan', [['', 'Custom']].concat(plans.map((f) => [f.id, f.name + ' · ' + inr(f.fee_paise)])), m.fee_plan_id || '') + field('Fee (₹)', 'fee', m.fee_paise != null ? m.fee_paise / 100 : '', 'type="number" min="0"') + '</div>' +
-      field('Paid until', 'paid', m.paid_until || '', 'type="date"') + '<button class="btn dark">' + (edit ? 'Save changes' : 'Create login') + '</button></form>', (el) => {
+      field('Paid until', 'paid', m.paid_until || '', 'type="date"') + '<div class="btns"><button class="btn dark">' + (edit ? 'Save changes' : 'Create login') + '</button>' + (edit ? '<button type="button" class="btn danger" data-remove="' + m.profile_id + '">Remove member</button>' : '') + '</div></form>', (el) => {
       const form = el.querySelector('form');
       form.feeplan.addEventListener('change', () => { const f = P.plans.find((x) => x.id === form.feeplan.value); if (f) form.fee.value = f.fee_paise / 100; });
+      const rm = form.querySelector('[data-remove]'); if (rm) rm.addEventListener('click', () => removeSheet(m.profile_id));
       form.addEventListener('submit', async (e) => {
         e.preventDefault(); const d = formData(form), b = form.querySelector('button');
         if (X.phone10(d.phone).length !== 10) return toast('Enter a 10-digit mobile number', true);
@@ -609,13 +718,15 @@
     });
   }
 
-  const VIEWS = { today: vToday, overview: vOverview, members: vMembers, trainers: vTrainers, fees: vFees, gymprofile: vGymProfile, facilities: vFacilities, events: vEvents, messages: vMessages, templates: vTemplates, workouts: vWorkouts };
+  const VIEWS = { today: vToday, overview: vOverview, cperf: vClientPerf, tperf: vTrainerPerf, members: vMembers, trainers: vTrainers, fees: vFees, gymprofile: vGymProfile, facilities: vFacilities, events: vEvents, messages: vMessages, templates: vTemplates, workouts: vWorkouts };
 
   async function onClick(e) {
     const b = e.target.closest('button,[data-member]'); if (!b || !root.contains(b)) return;
     const d = b.dataset;
     try {
       if (d.view) return go(d.view);
+      if (d.win) { cache.win = +d.win; return go(view); }
+      if (d.ctrainer) { cache.ctrainer = d.ctrainer; return go('cperf'); }
       if (d.member) { cache.mtab = 'plan'; return go('members', d.member); }
       if (d.plan) { const [mid, day] = d.plan.split('|'); cache.mtab = 'plan'; cache.pday = day; cache.pdayFor = mid; return go('members', mid); }
       if (d.mtab) { cache.mtab = d.mtab; return go('members', sub, true); }
@@ -675,6 +786,7 @@
     root.addEventListener('click', onClick);
     root.addEventListener('input', (e) => { if (e.target.id === 'msearch') { const v = e.target.value.toLowerCase(); $$('tr[data-q]', root).forEach((tr) => (tr.hidden = !tr.dataset.q.includes(v))); } });
     root.addEventListener('change', (e) => {
+      if (e.target.id === 'ctrainer') { cache.ctrainer = e.target.value; return go('cperf'); }
       const f = e.target.form;
       if (f && f.id === 'f-day' && e.target.name === 'wid') { const w = (cache.workouts || []).find((x) => x.id === e.target.value); if (w) { f.title.value = w.name; f.ex.value = exText(w.exercises); } }
       if (f && f.id === 'f-gym' && /^c\d$/.test(e.target.name)) e.target.closest('.hrow').classList.toggle('closed', e.target.checked);

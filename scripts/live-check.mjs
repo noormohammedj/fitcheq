@@ -45,6 +45,18 @@ const rm = await call(owner, { action: 'remove_user', user_id: made.id });
 const gone = !(await admin.from('fq_profiles').select('id').eq('id', made.id).maybeSingle()).data && !(await admin.from('fq_trainers').select('profile_id').eq('profile_id', made.id).maybeSingle()).data;
 const authGone = (await admin.auth.admin.getUserById(made.id)).error != null;
 ok(rm.ok && gone && authGone, 'owner removes the trainer; login, profile and details are gone');
+// ---------- owner adds and removes a member ----------
+{
+  const P3 = '9999900004';
+  const old = (await admin.from('fq_profiles').select('id').eq('phone', P3).maybeSingle()).data; if (old) await admin.auth.admin.deleteUser(old.id);
+  const plan = (await admin.from('fq_fee_plans').select('id, name, fee_paise').eq('name', 'Monthly').limit(1).single()).data;
+  const mm = await call(owner, { action: 'create_user', role: 'member', full_name: 'Live Check Member', phone: P3, password: 'Tmp-' + Math.random().toString(36).slice(2, 10), member: { trainer_id: tr, diet_type: 'veg', goal: 'lose', start_weight: 80, target_weight: 72, height_cm: 170, fee_plan_id: plan.id, plan_name: plan.name, fee_rupees: plan.fee_paise / 100 } });
+  const row = mm.id ? (await admin.from('fq_members').select('fee_plan_id, trainer_id, current_weight').eq('profile_id', mm.id).single()).data : null;
+  ok(!!row && row.fee_plan_id === plan.id && row.trainer_id === tr && Number(row.current_weight) === 80, 'owner adds a member on a fee plan with a trainer');
+  const rmm = await call(owner, { action: 'remove_user', user_id: mm.id });
+  ok(rmm.ok && !(await admin.from('fq_members').select('profile_id').eq('profile_id', mm.id).maybeSingle()).data && !(await admin.from('fq_weight_logs').select('id').eq('member_id', mm.id)).data.length, 'owner removes the member; their data goes too');
+}
+
 // ---------- the same calls the trainer and member screens make, on a date far ahead, cleaned up after ----------
 const memberC = await sessionFor('9000000101');
 const arj = (await admin.from('fq_profiles').select('id, gym_id').eq('phone', '9000000101').single()).data;
@@ -81,6 +93,26 @@ finally {
   await admin.from('fq_diet_logs').delete().eq('member_id', arj.id).eq('on_date', D);
   await admin.from('fq_notices').delete().like('title', 'Live check%');
 }
+// ---------- the performance and business screens' reads ----------
+try {
+  const t = new Date(), from = new Date(t); from.setDate(t.getDate() - 29);
+  const k = (d) => d.toISOString().slice(0, 10);
+  for (const [who, c] of [['owner', owner], ['trainer', trainerC]]) {
+    const r = await Promise.all([
+      c.from('fq_workout_assignments').select('member_id, on_date, status, assigned_by, created_at').gte('on_date', k(from)).lte('on_date', k(t)),
+      c.from('fq_diet_logs').select('member_id, on_date, status').gte('on_date', k(from)),
+      c.from('fq_weight_logs').select('member_id, on_date, weight').order('on_date'),
+      c.from('fq_notices').select('member_id, created_by, created_at').eq('kind', 'attendance'),
+      c.from('fq_member_meals').select('member_id, on_date, updated_by, updated_at').gte('on_date', k(from)),
+    ]);
+    const err = r.find((x) => x.error);
+    ok(!err && r[0].data.length > 0 && r[4].data.length > 0 && r[4].data.every((x) => x.updated_by), who + ' reads everything the performance screens need (' + r[0].data.length + ' workouts, ' + r[4].data.length + ' planned meals, all with a trainer)');
+  }
+  const op = await owner.from('fq_payments').select('amount_paise, paid_on');
+  const tp = await trainerC.from('fq_payments').select('amount_paise');
+  ok(!op.error && op.data.length >= 5 && !tp.error && tp.data.length === 0, 'owner sees fee collections; trainers see none');
+} catch (e) { ok(false, 'performance reads: ' + e.message); }
+
 const left = (await admin.from('fq_member_meals').select('id').like('items', 'Live check%')).data.length + (await admin.from('fq_workout_assignments').select('id').like('title', 'Live check%')).data.length;
 ok(left === 0, 'test rows cleaned up');
 console.log(fails ? '\n' + fails + ' check(s) failed' : '\nAll live checks passed');

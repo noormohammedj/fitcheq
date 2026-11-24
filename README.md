@@ -19,9 +19,9 @@ The Inraa Solution website embeds the demo member app from `demo/`, so keep `dem
 `demo/app.css` and `demo/demo.js` at these paths.
 
 ## What each role can do (v2, 24 Nov 2026)
-- **Owner (admin):** add, edit (name, mobile, details) and remove trainers; fee plans; opening hours (two sessions a day); facilities; members, payments, reminders; events and messages. Can also do everything a trainer does.
-- **Trainer:** each member's own meals and workout, day by day (14-day strip), with "Copy to other days" and "Fill from template"; attendance (from workouts marked done) with WhatsApp "we missed you" reminders; consistency chart; weights (current, ideal, target, BMI).
-- **Member:** their own meals and workouts; tick had or skip; mark workout done or skipped; current, ideal and target weight; height; gym hours (open now) and fee plans.
+- **Owner (admin):** Business overview (fees collected by month, overdue, renewals, members at risk, trainer scores); Trainer performance (follow-up score, plans ready, away clients reminded, client results); Client performance; add, edit (name, mobile, details) and remove trainers and members; fee plans; opening hours (two sessions a day); facilities; members, payments, reminders; events and messages. Can also do everything a trainer does.
+- **Trainer:** own follow-up score on Today; Client performance for their clients; each member's own meals and workout, day by day (14-day strip), with "Copy to other days" and "Fill from template"; attendance (from workouts marked done) with WhatsApp "we missed you" reminders; consistency chart; weights (current, ideal, target, BMI).
+- **Member:** this week and this month summaries; their own meals and workouts; tick had or skip; mark workout done or skipped; current, ideal and target weight; height; gym hours (open now) and fee plans.
 
 ## Tests
 - `npm run test:db`: every permission on an in-memory Postgres (67 checks, run twice around a rollback).

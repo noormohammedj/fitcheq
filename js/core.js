@@ -47,6 +47,7 @@
     home: '<path d="M3 11l9-7 9 7v9H3z"/>',
     wa: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
     copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>',
   };
   const ic = (n, c) => '<svg class="' + (c || 'ic') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
@@ -120,7 +121,7 @@
       s += tot ? '<rect x="' + (x + 3).toFixed(1) + '" y="' + (H - B - h).toFixed(1) + '" width="' + (bw - 6).toFixed(1) + '" height="' + Math.max(h, 1.5).toFixed(1) + '" class="cb"/>' : '<rect x="' + (x + 3).toFixed(1) + '" y="' + (H - B - 1.5) + '" width="' + (bw - 6).toFixed(1) + '" height="1.5" class="cbe"/>';
       const cx = (x + bw / 2).toFixed(1), cy = H - B + 12;
       s += d.wo === 'done' ? '<circle cx="' + cx + '" cy="' + cy + '" r="4" class="cwd"/>' : d.wo === 'skipped' ? '<path d="M' + (cx - 3.5) + ' ' + (cy - 3.5) + 'l7 7M' + (cx - 3.5) + ' ' + (cy + 3.5) + 'l7 -7" class="cws"/>' : d.wo === 'assigned' ? '<circle cx="' + cx + '" cy="' + cy + '" r="3.5" class="cwa"/>' : '';
-      if (i === 0 || i === n - 1 || i === Math.floor(n / 2)) s += '<text x="' + cx + '" y="' + (H - 4) + '" text-anchor="middle" class="ct">' + fmt(d.dk) + '</text>';
+      if (i === 0 || i === n - 1 || i === Math.floor(n / 2)) s += '<text x="' + (i === 0 ? L : i === n - 1 ? W - R : cx) + '" y="' + (H - 4) + '" text-anchor="' + (i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle') + '" class="ct">' + fmt(d.dk) + '</text>';
     });
     return '<svg class="cchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Meals had and workouts, last ' + n + ' days">' + s + '</svg>' +
       '<div class="legend"><span><i class="lb"></i>Meals had</span><span><i class="lwd"></i>Workout done</span><span><i class="lws">×</i>Skipped</span><span><i class="lwa"></i>Not marked</span></div>';

@@ -321,3 +321,32 @@ b.click { cursor: pointer; } b.click:hover { text-decoration: underline; }
   .btnspace { display: none; }
 }
 .member .group + .group { margin-top: 12px; }
+
+/* ---------- v3: business and performance ---------- */
+.okc { color: var(--ok); } .wac { color: var(--wa); } .noc { color: var(--no); }
+.bar.amber i { background: var(--wa); } .bar.red i { background: var(--no); }
+.sbar { min-width: 120px; display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 8px; }
+.sbar b { font-size: 17px; font-variant-numeric: tabular-nums; } .sbar .bar { margin: 0; }
+.tcard.perf dl { gap: 6px 12px; } .tcard.perf .sbar { margin: 4px 0 2px; }
+.tcard.perf .av { background: var(--fg); color: #fff; }
+.rchart { width: 100%; height: auto; display: block; }
+.rchart rect { fill: var(--surface-2); } .rchart rect.cur { fill: var(--ok); }
+.rchart .ct { fill: #8e8e93; font-size: 10px; font-family: var(--font); } .rchart .cv { fill: var(--fg); font-size: 10px; font-weight: 600; font-family: var(--font); }
+.fld.inl select { width: auto; padding: 9px 10px; font-size: 14px; }
+.myperf { display: grid; grid-template-columns: 240px 1fr; gap: 18px; align-items: center; }
+.myperf .stat4 { margin-top: 0; } .myperf p { grid-column: 1 / -1; margin: 0; }
+.panel .li .sbar { width: 140px; }
+.member .week { display: block; } .member .week > span { display: block; margin-bottom: 6px; }
+.wk { display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
+.wk.four { grid-template-columns: repeat(4, 1fr); margin-bottom: 8px; }
+.wk div + div { border-left: 1px solid var(--surface-2); }
+.wk b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; } .wk b small { font-size: 13px; color: var(--muted); font-weight: 500; }
+.wk span { font-size: 11.5px; color: var(--muted); }
+.pad0 { padding-top: 6px; }
+@media (max-width: 640px) {
+  .myperf { grid-template-columns: 1fr; }
+  .panel .li .sbar { width: 100%; }
+  .wk.four b { font-size: 17px; }
+}
+.cards.wide { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); }
+@media (max-width: 640px) { .cards.wide { grid-template-columns: 1fr; } }

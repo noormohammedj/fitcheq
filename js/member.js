@@ -5,7 +5,7 @@
 
   async function load(me) {
     const uid = me.user.id, t0 = today();
-    const from = key(addDays(t0, -21)), to = key(addDays(t0, 14));
+    const from = key(addDays(t0, -35)), to = key(addDays(t0, 14));
     const [m, trainers, meals, logs, wa, weights, notices, events, fac, fees] = await Promise.all([
       q(sb.from('fq_members').select('*').eq('profile_id', uid).single()),
       q(sb.from('fq_profiles').select('id, full_name, phone, role, fq_trainers(*)').in('role', ['trainer', 'admin'])),
@@ -31,6 +31,25 @@
     const since = key(addDays(today(), -(days || 14)));
     const l = S.logs.filter((x) => x.on_date >= since); if (!l.length) return null;
     return l.filter((x) => x.status === 'done').length / l.length;
+  }
+
+  // ---------- summaries: this week and this month ----------
+  function period(fromKey) {
+    const tk = key(today()), wa = S.wa.filter((w) => w.on_date >= fromKey && w.on_date <= tk && (w.on_date < tk || w.status !== 'assigned'));
+    const l = S.logs.filter((x) => x.on_date >= fromKey && x.on_date <= tk), had = l.filter((x) => x.status === 'done').length;
+    const before = S.weights.filter((w) => w.on_date < fromKey).pop() || S.weights.find((w) => w.on_date >= fromKey), last = S.weights[S.weights.length - 1];
+    return { done: wa.filter((w) => w.status === 'done').length, planned: wa.length, meals: l.length ? had / l.length : null, change: before && last && before !== last ? Number(last.weight) - Number(before.weight) : null };
+  }
+  function weekLine() {
+    const w = period(key(monday(today()))), c = X.consistency(S.wa, S.logs, 30);
+    return '<div class="card week"><span class="muted small">This week</span><div class="wk"><div><b>' + w.done + '<small>/' + w.planned + '</small></b><span>workouts</span></div><div><b>' + (w.meals == null ? '—' : Math.round(w.meals * 100) + '%') + '</b><span>meals had</span></div><div><b>' + c.streak + '</b><span>in a row</span></div></div></div>';
+  }
+  function monthCard() {
+    const t = today(), m0 = new Date(t.getFullYear(), t.getMonth(), 1), p = period(key(m0)), gain = S.m.goal === 'gain', pay = X.paidState(S.m);
+    const right = p.change == null ? '' : (gain ? p.change > 0 : p.change < 0) ? 'okc' : 'noc';
+    return '<h2 class="sec">This month <span>' + X.MO[t.getMonth()] + '</span></h2><div class="card"><div class="wk four"><div><b>' + p.done + '<small>/' + p.planned + '</small></b><span>workouts done</span></div><div><b>' + (p.meals == null ? '—' : Math.round(p.meals * 100) + '%') + '</b><span>meals had</span></div>' +
+      '<div><b class="' + right + '">' + (p.change == null ? '—' : (p.change > 0 ? '+' : '') + p.change.toFixed(1) + ' kg') + '</b><span>weight</span></div><div><b>' + (pay.days == null ? '—' : pay.days < 0 ? 'Due' : pay.days + 'd') + '</b><span>membership left</span></div></div>' +
+      '<div class="pad0">' + X.consistencyChart(X.consistency(S.wa, S.logs, 28)) + '</div></div>';
   }
 
   // ---------- pieces ----------
@@ -69,11 +88,11 @@
     const n = S.notices[0], ev = S.events[0];
     return '<header class="top"><span class="muted">' + WDL[dayIdx(t)] + ', ' + fmt(t) + '</span><h1>Hi, ' + esc(S.me.profile.full_name.split(' ')[0]) + '</h1></header>' +
       (p.cls !== 'ok' ? '<div class="banner ' + p.cls + '">' + ic('bill') + '<span>Membership: <b>' + p.label + '</b>' + (S.m.fee_paise ? ' · ' + inr(S.m.fee_paise) : '') + '. Please pay at the desk.</span></div>' : '') +
-      goalCard() +
+      goalCard(true) + weekLine() +
       '<h2 class="sec">Today’s meals <span>' + done + ' of ' + ms.length + ' had</span></h2>' + mealRows(t, true) +
       '<h2 class="sec">Today’s workout</h2>' + (wos.length ? wos.map((w) => workoutCard(w, true)).join('') : '<div class="empty">No workout today. Rest, walk and sleep well.</div>') +
       (ev ? '<h2 class="sec">Coming up at the gym</h2><div class="card event"><b>' + esc(ev.title) + '</b><div class="muted small">' + fmt(ev.starts_on, true) + (ev.starts_at ? ' · ' + ev.starts_at.slice(0, 5) : '') + '</div>' + (ev.details ? '<p class="small">' + esc(ev.details) + '</p>' : '') + '</div>' : '') +
-      (n ? '<h2 class="sec">Latest message</h2><div class="card"><b>' + esc(n.title) + '</b>' + (n.body ? '<p class="small">' + esc(n.body) + '</p>' : '') + '<div class="muted small">' + fmt(n.created_at.slice(0, 10)) + '</div></div>' : '');
+      (n ? '<h2 class="sec">Latest message</h2><div class="card"><b>' + esc(n.title) + '</b>' + (n.body ? '<p class="small">' + esc(n.body) + '</p>' : '') + '<div class="muted small">' + fmt(key(new Date(n.created_at))) + '</div></div>' : '');
   }
   function vDiet() {
     const base = addDays(monday(today()), dietWeek * 7), d = addDays(base, dietDay), t = today();
@@ -107,7 +126,7 @@
     return '<header class="top"><span class="muted">Since ' + fmt(S.m.joined_on, true) + (S.m.start_weight != null ? ' · started at ' + kg(S.m.start_weight) : '') + '</span><h1>Progress</h1></header>' +
       '<div class="three"><div class="now"><span>Current</span><b>' + kg(S.m.current_weight) + '</b></div><div><span>Ideal</span><b>' + (id ? kg(id.w) : '—') + '</b></div><div><span>Target</span><b>' + kg(S.m.target_weight) + '</b></div></div>' +
       '<p class="muted small center">' + (id ? (id.set ? 'Ideal weight set by your trainer.' : 'Ideal weight from your height.') + (id.range ? ' Healthy range ' + id.range.lo + '–' + id.range.hi + ' kg' + (bmi ? ', your BMI is ' + bmi.toFixed(1) : '') + '.' : '') : 'Add your height below to see your ideal weight.') + '</p>' +
-      goalCard() +
+      goalCard() + monthCard() +
       '<h2 class="sec">Log today’s weight</h2><form class="card inline" id="f-weight"><input name="w" type="number" step="0.1" min="20" max="350" inputmode="decimal" placeholder="e.g. ' + (S.m.current_weight || 70) + '" value="' + (last && last.on_date === key(today()) ? last.weight : '') + '" aria-label="Weight in kg" required><span class="muted">kg</span><button class="btn dark">Save</button></form>' +
       '<h2 class="sec">Weight</h2><div class="card">' + X.weightChart(S.weights, num(S.m.target_weight)) + '</div>' +
       '<h2 class="sec">My goal and diet</h2><form class="card form" id="f-goal">' +
@@ -127,7 +146,7 @@
       (c ? '<h2 class="sec">My trainer</h2><div class="group"><div class="row"><span class="av">' + X.initials(c.full_name) + '</span><div class="grow"><div class="ttl">' + esc(c.full_name) + '</div><div class="sub">' + esc((c.fq_trainers && c.fq_trainers.speciality) || 'Trainer') + (c.fq_trainers && c.fq_trainers.experience_years ? ' · ' + c.fq_trainers.experience_years + ' yrs' : '') + '</div></div></div>' +
         (c.fq_trainers && c.fq_trainers.slots ? '<div class="row"><span class="grow muted">On the floor</span><span class="r">' + esc(c.fq_trainers.slots) + '</span></div>' : '') + (c.fq_trainers && c.fq_trainers.certifications ? '<div class="row"><span class="grow muted">Certified</span><span class="r">' + esc(c.fq_trainers.certifications) + '</span></div>' : '') + '<div class="row"><span class="grow muted">Phone</span><span class="r sel">' + esc(c.phone) + '</span></div></div>' : '') +
       (S.events.length ? '<h2 class="sec">Events</h2><div class="group">' + S.events.map((e) => '<div class="row"><div class="date"><b>' + parse(e.starts_on).getDate() + '</b><span>' + X.MO[parse(e.starts_on).getMonth()] + '</span></div><div class="grow"><div class="ttl">' + esc(e.title) + '</div><div class="sub">' + (e.starts_at ? e.starts_at.slice(0, 5) + ' · ' : '') + esc(e.details || '') + '</div></div></div>').join('') + '</div>' : '') +
-      (S.notices.length ? '<h2 class="sec">Messages</h2><div class="group">' + S.notices.map((n) => '<div class="row"><div class="grow"><div class="ttl">' + esc(n.title) + '</div>' + (n.body ? '<div class="sub">' + esc(n.body) + '</div>' : '') + '</div><span class="r small">' + fmt(n.created_at.slice(0, 10)) + '</span></div>').join('') + '</div>' : '') +
+      (S.notices.length ? '<h2 class="sec">Messages</h2><div class="group">' + S.notices.map((n) => '<div class="row"><div class="grow"><div class="ttl">' + esc(n.title) + '</div>' + (n.body ? '<div class="sub">' + esc(n.body) + '</div>' : '') + '</div><span class="r small">' + fmt(key(new Date(n.created_at))) + '</span></div>').join('') + '</div>' : '') +
       (S.fac.length ? '<h2 class="sec">Facilities</h2>' + cats.map((cat) => '<div class="group" style="margin-bottom:10px">' + S.fac.filter((f) => (f.category || 'Other') === cat).map((f) => '<div class="row"><div class="grow"><div class="ttl">' + esc(f.name) + '</div><div class="sub">' + esc(cat) + (f.quantity > 1 ? ' · ' + f.quantity : '') + (f.note ? ' · ' + esc(f.note) : '') + '</div></div>' + (f.status === 'maintenance' ? '<span class="pill wa">Under repair</span>' : f.status === 'new' ? '<span class="pill ok">New</span>' : '') + '</div>').join('') + '</div>').join('') : '') +
       '<div class="btns" style="margin-top:20px"><button class="btn" data-act="pw">Change password</button><button class="btn" data-act="out">Sign out</button></div>';
   }

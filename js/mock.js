@@ -54,15 +54,17 @@
     ['Sameer Khan', '9000000103', 0, 'nonveg', 'lose', 180, 104.8, 99.0, 90, 'Half-yearly', 13500, 95, 0.72], ['Divya Krishnan', '9000000104', 0, 'veg', 'lose', 165, 68.5, 66.2, 62, 'Monthly', 2800, -4, 0.78], ['Rahul Nair', '9000000105', 1, 'veg', 'gain', 172, 64.0, 65.8, 70, 'Monthly', 2800, 12, 0.6]];
   const memberProfiles = mems.map(([name, phone, tr, diet, goal, h, sw, cw, tw, plan, fee, paid, adh]) => {
     const p = prof('member', name, phone), until = add(T, paid);
-    db.fq_members.push({ profile_id: p.id, gym_id: G, trainer_id: trs[tr].id, diet_type: diet, goal, height_cm: h, start_weight: sw, current_weight: cw, target_weight: tw, plan_name: plan, fee_plan_id: (FEES.find((f) => f.name === plan) || {}).id || null, ideal_weight: null, fee_paise: fee * 100, paid_until: key(until), joined_on: key(add(T, -42)) });
+    db.fq_members.push({ profile_id: p.id, gym_id: G, trainer_id: trs[tr].id, diet_type: diet, goal, height_cm: h, start_weight: sw, current_weight: cw, target_weight: tw, plan_name: plan, fee_plan_id: (FEES.find((f) => f.name === plan) || {}).id || null, ideal_weight: null, fee_paise: fee * 100, paid_until: key(until), joined_on: key(add(T, name.startsWith('Rahul') ? -10 : -42)) });
     // their own meals: last 10 days and the coming week (Rahul's coming week is left empty on purpose)
     const src = diet === 'veg' ? V : NV;
-    for (let i = -10; i <= (name.startsWith('Rahul') ? 0 : 6); i++) { const d = add(T, i), di = (d.getDay() + 6) % 7; MEALS.forEach((meal) => { const [items, kcal] = src[meal][(di + mems.length) % 7].split('|'); db.fq_member_meals.push({ id: uid(), gym_id: G, member_id: p.id, on_date: key(d), meal, items: goal === 'gain' && meal === 'snack' ? items + ', 1 banana' : items, kcal: +kcal + (goal === 'gain' && meal === 'snack' ? 90 : 0), protein_g: null }); }); }
-    db.fq_payments.push({ id: uid(), gym_id: G, member_id: p.id, amount_paise: fee * 100, paid_on: key(add(until, -30)), period_until: key(until), method: 'UPI', note: null, recorded_by: owner.id, created_at: new Date().toISOString() });
+    for (let i = -10; i <= (name.startsWith('Rahul') ? 0 : 6); i++) { const d = add(T, i), di = (d.getDay() + 6) % 7; MEALS.forEach((meal) => { const [items, kcal] = src[meal][(di + mems.length) % 7].split('|'); db.fq_member_meals.push({ id: uid(), gym_id: G, member_id: p.id, updated_by: trs[tr].id, updated_at: add(T, Math.min(i, 0) - 1 - tr).toISOString(), on_date: key(d), meal, items: goal === 'gain' && meal === 'snack' ? items + ', 1 banana' : items, kcal: +kcal + (goal === 'gain' && meal === 'snack' ? 90 : 0), protein_g: null }); }); }
+    const months = { Monthly: 1, Quarterly: 3, 'Half-yearly': 6 }[plan] || 1;
+    for (let k = 0; k < 6; k += months) { const pe = new Date(until); pe.setMonth(pe.getMonth() - k); const pd = name.startsWith('Rahul') ? add(T, -10) : new Date(pe); if (!name.startsWith('Rahul')) pd.setMonth(pd.getMonth() - months); else if (k) continue; if (pd < add(T, -190) || pd > T) continue;
+      db.fq_payments.push({ id: uid(), gym_id: G, member_id: p.id, amount_paise: fee * 100, paid_on: key(pd), period_until: key(pe), method: k % 2 ? 'Cash' : 'UPI', note: null, recorded_by: owner.id, created_at: pd.toISOString() }); }
     for (let i = 6; i >= 0; i--) { const t = (6 - i) / 6; db.fq_weight_logs.push({ id: uid(), gym_id: G, member_id: p.id, on_date: key(add(T, -i * 7)), weight: Math.round((sw + (cw - sw) * t + (i && i < 6 ? (rnd() - 0.5) * 0.6 : 0)) * 10) / 10 }); }
     for (let i = 10; i >= 1; i--) MEALS.forEach((meal) => db.fq_diet_logs.push({ member_id: p.id, gym_id: G, on_date: key(add(T, -i)), meal, status: rnd() < adh ? 'done' : 'skipped' }));
     for (let i = -7; i <= 7; i++) { const d = add(T, i), wi = SPLIT[goal][(d.getDay() + 6) % 7]; if (wi == null) continue; const w = db.fq_workouts[wi];
-      db.fq_workout_assignments.push({ id: uid(), gym_id: G, member_id: p.id, on_date: key(d), workout_id: w.id, title: w.name, exercises: w.exercises, note: null, assigned_by: trs[tr].id, status: i < 0 ? (rnd() < adh + 0.05 ? 'done' : 'skipped') : 'assigned', created_at: new Date().toISOString() }); }
+      db.fq_workout_assignments.push({ id: uid(), gym_id: G, member_id: p.id, on_date: key(d), workout_id: w.id, title: w.name, exercises: w.exercises, note: null, assigned_by: trs[tr].id, status: i < 0 ? (rnd() < adh + 0.05 ? 'done' : 'skipped') : i === 0 && name.startsWith('Divya') ? 'done' : 'assigned', created_at: new Date().toISOString() }); }
     if (paid < 7) db.fq_notices.push({ id: uid(), gym_id: G, member_id: p.id, kind: 'payment', title: paid < 0 ? 'Membership payment overdue' : 'Membership payment due', body: 'Please pay ₹' + fee.toLocaleString('en-IN') + ' at the desk or by UPI. Thank you!', created_by: owner.id, created_at: new Date().toISOString() });
     return p;
   });
@@ -72,6 +74,7 @@
     .forEach(([title, d, t, details]) => db.fq_events.push({ id: uid(), gym_id: G, title, starts_on: key(add(T, d)), starts_at: t, details, created_by: owner.id, created_at: new Date().toISOString() }));
   db.fq_notices.push({ id: uid(), gym_id: G, member_id: null, kind: 'general', title: 'Welcome to the Prozone app', body: 'Tick your meals, mark your workouts and log your weight. Your trainer sees it straight away.', created_by: owner.id, created_at: new Date().toISOString() });
 
+  db.fq_notices.push({ id: uid(), gym_id: G, member_id: memberProfiles[0].id, kind: 'attendance', title: 'We missed you', body: 'Hi Arjun, we missed you at Prozone. See you tomorrow! – Priya', created_by: trs[0].id, created_at: add(T, -1).toISOString() });
   const me = role === 'owner' ? owner : role === 'trainer' ? trs[0] : memberProfiles[0];
 
   // ---------- a small query engine with the same API the app uses ----------

@@ -17,14 +17,17 @@ window.FQE2E = async function (role) {
   const close = async () => { const s = sheetEl(); if (s) { s.querySelector('[data-close]').click(); await sleep(120); } };
   const nav = async (label) => { await click(byText('.snav .nav', label), 500); await until(() => !$('.loading')); };
   const main = () => $('.smain');
+  const panel = (title) => $$('.smain .panel').find((p) => txt(p.querySelector('header h3')).includes(title));
   const step = async (name, fn) => { try { await fn(); } catch (e) { ok(false, name + ' threw: ' + e.message); } await close(); };
 
   // ---------------------------------------------------------------- owner
   if (role === 'owner') {
     await until(() => $('.smain .kpis'));
     await step('overview', async () => {
-      ok(byText('.kpis div', 'Active members') && byText('.kpis div', 'Came today'), 'overview shows member and attendance numbers');
-      ok($$('.panel', main())[0] && txt($$('.panel', main())[0]).includes('Attendance') && $$('.panel .pill', main()).length >= 5, 'overview lists attendance for every member');
+      ok(byText('.smain h1', 'Business') && byText('.kpis div', 'Fees collected') && byText('.kpis div', 'Overdue') && byText('.kpis div', 'Renewals') && byText('.kpis div', 'Active members'), 'business overview shows fees collected, overdue, renewals and members');
+      ok($$('.rchart rect').length === 6 && /₹[1-9]/.test(txt(byText('.kpis div', 'Fees collected'))), 'fees collected for the last 6 months, with this month’s total');
+      ok(!!panel('Trainers') && $$('.li', panel('Trainers')).length === 2 && $$('.sbar', panel('Trainers')).length === 2, 'trainer scores on the overview');
+      ok(!!panel('Members at risk') && !!panel('Payments to collect'), 'members at risk and payments to collect');
       ok(!!byText('.snav .nav', 'Trainers') && !!byText('.snav .nav', 'Fee plans') && !!byText('.snav .nav', 'Gym and hours'), 'owner sees Trainers, Fee plans and Gym and hours');
     });
     await step('trainers: add', async () => {
@@ -131,7 +134,36 @@ window.FQE2E = async function (role) {
       await click($('#sheet [data-yes]'), 700); await until(() => byText('.smain h1', 'Members'));
       ok(!byText('.smain tr', 'Kavya Test'), 'member removed');
     });
+    await step('trainer performance', async () => {
+      await nav('Trainer performance');
+      const cards = $$('.smain .tcard.perf'), scores = cards.map((c) => +txt(c.querySelector('.sbar b')));
+      ok(cards.length === 2 && scores.every((v) => v >= 0 && v <= 100), 'each trainer has a follow-up score from 0 to 100');
+      ok(scores[0] >= scores[1], 'trainers are ranked best first');
+      ok(['Plans ready', 'Away clients reminded', 'Reminders sent', 'Client workouts done', 'Client meals had', 'Average progress', 'On track'].every((k) => txt(cards[0]).includes(k)), 'shows plans, follow-ups, reminders, client results and status counts');
+      ok(txt(main()).includes('Follow-up score:'), 'explains how the score is worked out');
+      await click(byText('.seg2 button', '30 days'), 700);
+      ok(txt($('.smain .shead')).includes('30 days') && $('.seg2 button.on').textContent === '30 days', 'switches to the last 30 days');
+      await click(byText('.smain .tcard', 'Karthik').querySelector('[data-ctrainer]'), 800);
+      ok(byText('.smain h1', 'Client performance') && $$('.smain tbody tr').length === 2 && $$('.smain tbody tr').every((tr) => txt(tr).includes('Karthik')), 'See their clients opens only that trainer’s clients');
+    });
+    await step('client performance', async () => {
+      set($('#ctrainer'), ''); await sleep(800); await until(() => $$('.smain tbody tr').length === 5);
+      const rows = $$('.smain tbody tr');
+      ok(rows.length === 5 && rows.every((tr) => /On track|Needs attention|At risk|Getting started/.test(txt(tr))), 'every member has a status');
+      ok(rows.every((tr) => /\d+\/\d+/.test(txt(tr.querySelector('[data-l="Workouts"]'))) && /kg|—/.test(txt(tr.querySelector('[data-l="Weight"]')))), 'workouts done, meals, last came, weight change and target for each');
+      const order = rows.map((tr) => ['At risk', 'Needs attention', 'On track', 'Getting started'].findIndex((k) => txt(tr).includes(k)));
+      ok(order.every((v, i) => !i || v >= order[i - 1]), 'members who need help are listed first');
+      ok(/On track\s*\d/.test(txt($('.kpis'))) && /At risk\s*\d/.test(txt($('.kpis'))), 'totals for on track, needs attention and at risk');
+      await click(rows[0], 800); await until(() => $('#f-day'));
+      ok(!!$('#f-day'), 'a row opens that member');
+    });
+    await step('remove a member from Edit', async () => {
+      await click(byText('button', 'Edit'), 500);
+      const rm = $('#sheet [data-remove]'); ok(!!rm, 'Edit member has a Remove member button');
+      await click(rm, 400); ok(txt(sheetEl()).includes('can’t be undone'), 'it asks before removing');
+    });
     await step('owner plans too', async () => {
+      await nav('Members');
       await click(byText('.smain tr', 'Divya'), 600); await until(() => $('#f-day'));
       ok(!!$('#f-day'), 'owner can also plan a member’s diet and workouts');
     });
@@ -143,9 +175,11 @@ window.FQE2E = async function (role) {
     await step('today', async () => {
       ok(byText('.smain h1', 'Today') && byText('.kpis div', 'Came today') && byText('.kpis div', 'Away 3+ days'), 'trainer starts on Today with attendance numbers');
       ok(!byText('.snav .nav', 'Trainers') && !byText('.snav .nav', 'Fee plans') && !byText('.snav .nav', 'Gym and hours'), 'trainer does not see owner settings');
-      ok(txt(main()).includes('Arjun') && !txt($$('.panel', main())[0]).includes('Rahul'), 'attendance shows only the trainer’s own clients');
+      ok(txt(panel('Attendance')).includes('Arjun') && !txt(panel('Attendance')).includes('Rahul'), 'attendance shows only the trainer’s own clients');
+      ok(!!$('.myperf') && /\d+/.test(txt($('.myperf .sbar b'))) && txt($('.myperf')).includes('away clients reminded'), 'trainer sees their own follow-up score');
+      ok(!!byText('.kpis div', 'Plans ready'), 'and how many clients have plans for the next 3 days');
       await click(byText('button', 'Show all members'), 600); await until(() => txt(main()).includes('Rahul'));
-      ok(txt($$('.panel', main())[1]).includes('Rahul'), 'plans missing lists Rahul, who has no meals for the next 3 days');
+      ok(txt(panel('Plans missing')).includes('Rahul'), 'plans missing lists Rahul, who has no meals for the next 3 days');
     });
     await step('missed-you reminder', async () => {
       const btn = $('.smain [data-missed]');
@@ -160,7 +194,7 @@ window.FQE2E = async function (role) {
       ok(/reminded/.test(txt(main())), 'the list shows the member was reminded');
     });
     await step('plan a day for Rahul', async () => {
-      await click(byText('.smain .li', 'Rahul', $$('.smain .panel')[1]).querySelector('[data-plan]'), 700); await until(() => $('#f-day'));
+      await click(byText('.smain .li', 'Rahul', panel('Plans missing')).querySelector('[data-plan]'), 700); await until(() => $('#f-day'));
       const f = $('#f-day');
       ok(!!f && byText('.smain h1', 'Rahul') && f.i_breakfast.value === '', 'Plan opens Rahul’s empty day');
       set(f.i_breakfast, 'Oats 60 g, 2 eggs, banana'); set(f.k_breakfast, '450'); set(f.p_breakfast, '25');
@@ -226,6 +260,13 @@ window.FQE2E = async function (role) {
       await click(byText('button', 'Log weight')); f = $('#sheet form'); set(f.w, '86.4'); await submit(f, 700); await until(() => $('.kpis'));
       ok(txt($('.kpis')).includes('86.4 kg'), 'logging a weight updates the current weight');
     });
+    await step('client performance for a trainer', async () => {
+      await nav('Client performance');
+      ok($$('.smain tbody tr').length === 5, 'with all members showing it lists 5');
+      await click(byText('button', 'Show my clients'), 800);
+      ok($$('.smain tbody tr').length === 3 && $$('.smain tbody tr').every((tr) => txt(tr).includes('Priya')), 'my clients: only the trainer’s 3');
+      ok(!$('#ctrainer') && !byText('.snav .nav', 'Trainer performance'), 'trainers don’t see other trainers’ scores');
+    });
     await step('templates and library', async () => {
       await nav('Diet templates');
       ok(byText('.smain h1', 'Diet templates') && txt(main()).includes('Starting points only'), 'templates are clearly starting points');
@@ -280,6 +321,14 @@ window.FQE2E = async function (role) {
       ok(toast().includes('Saved') && txt($('.three')).includes('79.0 kg'), 'member updates height and target');
       const w = $('#f-weight'); set(w.w, '86.9'); await submit(w, 600);
       ok(txt($('.three')).includes('86.9 kg'), 'member logs today’s weight and current weight updates');
+    });
+    await step('this week and this month', async () => {
+      await tab('Today');
+      ok(!!$('.mscroll .week') && /workouts/.test(txt($('.mscroll .week'))) && /meals had/.test(txt($('.mscroll .week'))), 'today shows this week’s workouts and meals');
+      await tab('Progress');
+      const h = byText('.mscroll h2.sec', 'This month'); ok(!!h, 'progress has a This month section');
+      const card = h.nextElementSibling;
+      ok($$('.wk div', card).length === 4 && /workouts done/.test(txt(card)) && /membership left/.test(txt(card)) && !!card.querySelector('.cchart'), 'workouts, meals, weight change, membership days and a 28-day chart');
     });
     await step('gym tab', async () => {
       await tab('Gym');
