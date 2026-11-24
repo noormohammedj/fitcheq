@@ -64,6 +64,7 @@
     try {
       const fn = VIEWS[v] || VIEWS.members; const html = await fn(); shell(html); $('.smain', root).scrollTop = top;
       const sel = $('.pday.sel', root); if (sel) sel.parentElement.scrollLeft = sel.offsetLeft - sel.parentElement.offsetLeft - 8; // keep the chosen day in view on phones
+      const on = $('.snav .nav.on', root), bar = $('.snav', root); if (on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = on.offsetLeft - bar.clientWidth / 3; // and the open menu item
     }
     catch (e) { fail(e); shell(head('Something went wrong', 'Please refresh the page.')); }
   }

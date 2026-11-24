@@ -58,7 +58,8 @@
     role = o.role;
     const old = scr.querySelector('iframe'); if (old) old.remove();
     const f = document.createElement('iframe'); f.title = 'Fitcheq app'; f.src = '../?r=' + o.role + Date.now() + '#preview=' + o.role; scr.appendChild(f);
-    return new Promise((r) => f.addEventListener('load', () => setTimeout(r, 1300)));
+    // still frames: switch off the app's animations inside the frame
+    return new Promise((r) => f.addEventListener('load', () => { const st = f.contentDocument.createElement('style'); st.textContent = '*{animation:none!important;transition:none!important}'; f.contentDocument.head.appendChild(st); setTimeout(r, 1300); }));
   };
   window.tap = function (sel, click = true) {
     const d = frameDoc(), el = typeof sel === 'string' ? d.querySelector(sel) : sel; if (!el) return 'missing ' + sel;
@@ -68,6 +69,11 @@
     dot.style.left = (fr.left - sr.left + r.left + r.width / 2) + 'px'; dot.style.top = (fr.top - sr.top + r.top + r.height / 2) + 'px';
     if (click) el.click();
     return 'ok';
+  };
+  // show the tap marker on an element without scrolling the page
+  window.mark = function (el) {
+    const f = scr.querySelector('iframe'), fr = f.getBoundingClientRect(), r = el.getBoundingClientRect(), sr = scr.getBoundingClientRect(), dot = document.getElementById('dot');
+    dot.style.display = 'block'; dot.style.left = (fr.left - sr.left + r.left + r.width / 2) + 'px'; dot.style.top = (fr.top - sr.top + r.top + r.height / 2) + 'px';
   };
   window.hideDot = () => { document.getElementById('dot').style.display = 'none'; };
   window.wait = (ms) => new Promise((r) => setTimeout(r, ms));
